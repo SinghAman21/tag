@@ -31,6 +31,7 @@ export default function LocalPlay() {
   const [roundLength, setRoundLength] = useState(120);
   const [selectedMap, setSelectedMap] = useState<string>("arena");
   const [gameStarted, setGameStarted] = useState(false);
+  const [hudTimeLeft, setHudTimeLeft] = useState(roundLength);
   const [, setRenderVersion] = useState(0);
   const [playerNames, setPlayerNames] = useState(["Dash", "Blitz", "Rocket", "Ninja"]);
 
@@ -47,6 +48,7 @@ export default function LocalPlay() {
     gameRef.current = createLocalGame(map, names, roundLength);
     gameRef.current.running = true;
     powerUpTimerRef.current = 0;
+    setHudTimeLeft(roundLength);
     setGameStarted(true);
   }, [selectedMap, numPlayers, roundLength, playerNames]);
 
@@ -63,6 +65,8 @@ export default function LocalPlay() {
 
     const inputs = getInputs();
     updateLocalGame(game, inputs, dt);
+    const nextHudTime = Math.max(0, Math.ceil(game.roundTimeRemaining));
+    setHudTimeLeft(current => current === nextHudTime ? current : nextHudTime);
     if (game.ended) {
       setRenderVersion(v => v + 1);
       return;
@@ -242,16 +246,39 @@ export default function LocalPlay() {
   // 2. ACTIVE CANVAS VIEW
   if (gameStarted) {
     return (
-      <canvas
-        ref={canvasRef}
-        style={{
-          display: "block",
-          width: "100vw",
-          height: "100vh",
-          background: "#0C0A1A",
-          cursor: "none",
-        }}
-      />
+      <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#0C0A1A" }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: "block",
+            width: "100vw",
+            height: "100vh",
+            background: "#0C0A1A",
+            cursor: "none",
+          }}
+        />
+        <div style={{
+          position: "fixed",
+          top: "0.75rem",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 50,
+          minWidth: "110px",
+          padding: "0.25rem 0.85rem",
+          background: hudTimeLeft <= 10 ? "var(--arcade-red)" : "#1E1B4B",
+          border: `3px solid ${hudTimeLeft <= 10 ? "var(--arcade-yellow)" : "#383464"}`,
+          borderRadius: "10px",
+          boxShadow: "0 4px 0 #0D0B1C",
+          color: "var(--arcade-yellow)",
+          fontFamily: "'Outfit', monospace",
+          fontSize: "1.35rem",
+          fontWeight: 900,
+          textAlign: "center",
+          pointerEvents: "none",
+        }}>
+          {Math.floor(hudTimeLeft / 60)}:{String(hudTimeLeft % 60).padStart(2, "0")}
+        </div>
+      </div>
     );
   }
 

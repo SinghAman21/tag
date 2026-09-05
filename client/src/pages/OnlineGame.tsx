@@ -69,6 +69,7 @@ export default function OnlineGame() {
   const [serverHostId, setServerHostId] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [hudTimeLeft, setHudTimeLeft] = useState(roundLength);
 
   const clientRef = useRef<Colyseus.Client | null>(null);
   const roomRef = useRef<Colyseus.Room | null>(null);
@@ -162,6 +163,7 @@ export default function OnlineGame() {
 
         room.onMessage("gameStarted", () => {
           setRoundResult(null);
+          setHudTimeLeft(roundLength);
           setStatus("playing");
         });
 
@@ -261,6 +263,9 @@ export default function OnlineGame() {
         e.remainingMs -= 16;
         return e.remainingMs > 0;
       });
+      const nextHudTime = Math.max(0, Math.ceil(state.roundTimeRemaining ?? 0));
+      setHudTimeLeft(current => current === nextHudTime ? current : nextHudTime);
+
       const renderState = {
         players: state.players,
         spawns: state.spawns,
@@ -368,7 +373,7 @@ export default function OnlineGame() {
 
   // 2. ROUND END VIEW
   if (status === "ended" && roundResult) {
-    const sortedScores = [...(roundResult.scores ?? [])].sort((a: any, b: any) => b.score - a.score);
+    const roundPlayers = roundResult.scores ?? [];
 
     return (
       <div className="arcade-bg">
@@ -399,80 +404,43 @@ export default function OnlineGame() {
             ROUND OVER!
           </h1>
 
-          {/* Loser Highlight */}
-          <div style={{
-            background: "rgba(255, 71, 87, 0.15)",
-            border: "3px solid var(--arcade-red)",
-            borderRadius: "16px",
-            padding: "1rem 1.5rem",
-            marginBottom: "1.8rem",
-            boxShadow: "0 6px 0 rgba(196, 38, 53, 0.4)",
-          }}>
-            <div style={{ fontSize: "2rem", marginBottom: "0.3rem" }}>💀</div>
-            <div style={{ color: "var(--arcade-red)", fontWeight: 800, fontSize: "1.4rem" }}>
-              {roundResult.loserName} WAS "IT"!
-            </div>
-            <div style={{ color: "var(--text-dim)", fontSize: "0.95rem", marginTop: "0.2rem" }}>
-              Time ran out while they were tagged. They lose this round!
-            </div>
-          </div>
-
-          {/* Scores Roster */}
+          {/* Round Players */}
           <div style={{ marginBottom: "2rem" }}>
-            <h3 style={{
-              fontSize: "0.9rem",
-              fontWeight: 800,
-              color: "var(--text-dim)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              marginBottom: "0.75rem",
-              textAlign: "left",
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: "0.75rem",
             }}>
-              Final Tag Standings
-            </h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {sortedScores.map((s: any, rank: number) => (
+              {roundPlayers.map((p: any) => (
                 <div
-                  key={s.id}
+                  key={p.id}
                   style={{
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.75rem 1.2rem",
-                    background: s.wasIt ? "rgba(255, 71, 87, 0.15)" : "var(--bg-card-inner)",
-                    border: `3px solid ${s.wasIt ? "var(--arcade-red)" : "#0D0B1C"}`,
-                    borderRadius: "12px",
+                    gap: "0.5rem",
+                    padding: "0.85rem",
+                    background: "var(--bg-card-inner)",
+                    border: `3px solid ${p.color ?? "#FFFFFF"}`,
+                    borderRadius: "14px",
                     boxShadow: "0 4px 0 #0D0B1C",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <span style={{ fontSize: "1.2rem" }}>
-                      {rank === 0 ? "🥇" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : "🎖️"}
-                    </span>
-                    <span style={{
-                      fontWeight: 800,
-                      fontSize: "1.1rem",
-                      color: s.wasIt ? "var(--arcade-red)" : "#FFFFFF",
-                    }}>
-                      {s.name}
-                    </span>
-                    {s.wasIt && (
-                      <span style={{
-                        background: "var(--arcade-red)",
-                        color: "#FFFFFF",
-                        fontSize: "0.75rem",
-                        fontWeight: 900,
-                        padding: "0.15rem 0.5rem",
-                        borderRadius: "6px",
-                      }}>
-                        IT
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ fontWeight: 800, fontSize: "1.1rem", color: "var(--arcade-yellow)" }}>
-                    {s.score} {s.score === 1 ? "tag" : "tags"}
+                  <div style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "50%",
+                    background: p.color ?? "#FFFFFF",
+                    border: "3px solid #FFFFFF",
+                    boxShadow: "0 3px 0 rgba(0, 0, 0, 0.35)",
+                  }} />
+                  <div style={{
+                    fontWeight: 900,
+                    fontSize: "1rem",
+                    color: "#FFFFFF",
+                    textAlign: "center",
+                  }}>
+                    {p.name}
                   </div>
                 </div>
               ))}
@@ -712,16 +680,39 @@ export default function OnlineGame() {
   // 4. ACTIVE PLAYING CANVAS VIEW
   if (status === "playing") {
     return (
-      <canvas
-        ref={canvasRef}
-        style={{
-          display: "block",
-          width: "100vw",
-          height: "100vh",
-          background: "#0C0A1A",
-          cursor: "none",
-        }}
-      />
+      <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#0C0A1A" }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: "block",
+            width: "100vw",
+            height: "100vh",
+            background: "#0C0A1A",
+            cursor: "none",
+          }}
+        />
+        <div style={{
+          position: "fixed",
+          top: "0.75rem",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 50,
+          minWidth: "110px",
+          padding: "0.25rem 0.85rem",
+          background: hudTimeLeft <= 10 ? "var(--arcade-red)" : "#1E1B4B",
+          border: `3px solid ${hudTimeLeft <= 10 ? "var(--arcade-yellow)" : "#383464"}`,
+          borderRadius: "10px",
+          boxShadow: "0 4px 0 #0D0B1C",
+          color: "var(--arcade-yellow)",
+          fontFamily: "'Outfit', monospace",
+          fontSize: "1.35rem",
+          fontWeight: 900,
+          textAlign: "center",
+          pointerEvents: "none",
+        }}>
+          {Math.floor(hudTimeLeft / 60)}:{String(hudTimeLeft % 60).padStart(2, "0")}
+        </div>
+      </div>
     );
   }
 

@@ -724,7 +724,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     const scores = playerList(this.s).map(p => ({
       id: p.id,
       name: p.name,
-      score: p.score,
+      color: p.color,
       wasIt: p.isIt,
     }));
 

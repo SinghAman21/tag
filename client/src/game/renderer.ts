@@ -7,7 +7,6 @@ import {
   POWER_UP_CONFIGS,
   POWER_UP_INDEX_TO_TYPE,
   PLAYER_SIZE,
-  HUD_HEIGHT,
 } from "chase-tag-shared";
 import type { LocalGameState, VisualEvent } from "./engine.js";
 
@@ -113,23 +112,15 @@ export function renderGame(
   const decoys = extractDecoys(rawState.decoys);
   const events: VisualEvent[] = rawState.events ?? [];
 
-  // Responsive Viewport Scale Calculation
-  const availableW = canvasW;
-  const availableH = canvasH - HUD_HEIGHT;
-  const scale = Math.min(1, availableW / map.width, availableH / map.height);
+  // Fill the entire canvas with the arena instead of letterboxing it.
+  const scaleX = canvasW / map.width;
+  const scaleY = canvasH / map.height;
 
-  const stageScaledW = map.width * scale;
-  const stageScaledH = map.height * scale;
-  const offsetX = Math.floor((availableW - stageScaledW) / 2);
-  const offsetY = Math.floor((availableH - stageScaledH) / 2) + HUD_HEIGHT;
-
-  // Outer stage letterbox background (warm deep cartoon dusk)
   ctx.fillStyle = "#0e0c1f";
-  ctx.fillRect(0, HUD_HEIGHT, canvasW, canvasH - HUD_HEIGHT);
+  ctx.fillRect(0, 0, canvasW, canvasH);
 
   ctx.save();
-  ctx.translate(offsetX, offsetY);
-  ctx.scale(scale, scale);
+  ctx.scale(scaleX, scaleY);
 
   // Outer arena shadow
   ctx.save();
@@ -637,7 +628,6 @@ function drawCartoonPlayer(
 ) {
   const cx = x + PLAYER_SIZE;
   const cy = y + PLAYER_SIZE;
-  const now = Date.now();
 
   // 1. Soft Floor Shadow
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
@@ -645,20 +635,7 @@ function drawCartoonPlayer(
   ctx.ellipse(cx, y + PLAYER_SIZE * 2 + 3, PLAYER_SIZE * 0.85, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 2. DANGER AURA (For the IT Player)
-  if (isIt) {
-    const auraPulse = Math.sin(now / 120) * 5;
-    ctx.strokeStyle = "#EF4444";
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.ellipse(cx, y + PLAYER_SIZE * 2 + 3, PLAYER_SIZE + 8 + auraPulse, 7 + auraPulse * 0.3, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = "rgba(239, 68, 68, 0.2)";
-    ctx.fill();
-  }
-
-  // 3. Chubby Cartoon Bean Body
+  // 2. Chubby Cartoon Bean Body
   const bodyColor = isFrozen ? "#60A5FA" : color;
   const bodyW = PLAYER_SIZE * 2 - 4;
   const bodyH = PLAYER_SIZE * 2 - 2;
@@ -737,64 +714,23 @@ function drawCartoonPlayer(
     ctx.restore();
   }
 
-  // 6. GIANT "IT" INDICATOR (Crown + Pointer Arrow)
-  if (isIt) {
-    const bob = Math.sin(now / 140) * 5;
-    const crownY = y - 18 + bob;
-
-    ctx.save();
-    ctx.translate(cx, crownY);
-
-    // Glowing Red IT Banner
-    ctx.fillStyle = "#EF4444";
-    ctx.beginPath();
-    roundRectPath(ctx, -18, -20, 36, 20, 6);
-    ctx.fill();
-
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
-    // Bold "IT!" text
-    ctx.font = "900 12px 'Fredoka', sans-serif";
-    ctx.fillStyle = "#FDE047";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("IT! 👑", 0, -10);
-
-    // Downward pointer arrow
-    ctx.fillStyle = "#EF4444";
-    ctx.beginPath();
-    ctx.moveTo(0, 8);
-    ctx.lineTo(-7, 0);
-    ctx.lineTo(7, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // 7. Player Name Tag Badge
+  // 6. Player Name Tag Badge
   ctx.save();
   ctx.font = "bold 11px 'Fredoka', sans-serif";
   ctx.textAlign = "center";
-  const textY = isIt ? y - 42 : y - 10;
+  const textY = y - 10;
 
   const tagW = ctx.measureText(playerName).width + 14;
-  ctx.fillStyle = "#0F172A";
+  ctx.fillStyle = isIt ? "#EF4444" : "#0F172A";
   ctx.beginPath();
   roundRectPath(ctx, cx - tagW / 2, textY - 11, tagW, 16, 5);
   ctx.fill();
 
-  ctx.strokeStyle = isIt ? "#EF4444" : color;
+  ctx.strokeStyle = isIt ? "#FFFFFF" : color;
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  ctx.fillStyle = isIt ? "#FDE047" : "#FFFFFF";
+  ctx.fillStyle = "#FFFFFF";
   ctx.fillText(playerName, cx, textY + 1);
   ctx.restore();
 }
@@ -808,95 +744,10 @@ export function renderHUD(
   canvasW: number,
   localPlayerIndex: number = 0
 ) {
-  // Top HUD Bar
-  ctx.fillStyle = "#121026";
-  ctx.fillRect(0, 0, canvasW, HUD_HEIGHT);
-
-  // Bottom edge line
-  ctx.fillStyle = "#0D0B1C";
-  ctx.fillRect(0, HUD_HEIGHT - 3, canvasW, 3);
-
-  const timeLeft = Math.max(0, Math.ceil(rawState.roundTimeRemaining ?? 0));
   const players = extractPlayers(rawState.players);
-  const itPlayer = players.find(p => p.isIt);
   const localPlayer = players[localPlayerIndex] || players[0];
 
-  // 1. LEFT: "CURRENT IT" ALERT BADGE
-  if (itPlayer) {
-    ctx.save();
-    ctx.translate(16, 8);
-
-    ctx.fillStyle = "#EF4444";
-    ctx.beginPath();
-    roundRectPath(ctx, 0, 0, 160, 32, 10);
-    ctx.fill();
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.font = "900 10px 'Fredoka', sans-serif";
-    ctx.fillStyle = "#FDE047";
-    ctx.textAlign = "left";
-    ctx.fillText("👑 CURRENT IT:", 10, 13);
-
-    ctx.font = "800 13px 'Fredoka', sans-serif";
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillText(itPlayer.name.slice(0, 12), 10, 26);
-    ctx.restore();
-  }
-
-  // 2. CENTER: RETRO ARCADE TIMER BOX
-  const isUrgent = timeLeft <= 10;
-  const timerW = 130;
-  const timerH = 36;
-  const timerX = Math.floor(canvasW / 2 - timerW / 2);
-  const timerY = 6;
-
-  ctx.save();
-  ctx.fillStyle = isUrgent ? "#EF4444" : "#1E1B4B";
-  ctx.beginPath();
-  roundRectPath(ctx, timerX, timerY, timerW, timerH, 10);
-  ctx.fill();
-
-  ctx.strokeStyle = isUrgent ? "#FDE047" : "#383464";
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-
-  // Timer numbers
-  ctx.font = "900 22px 'Outfit', monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = isUrgent ? "#FFFFFF" : "#FDE047";
-  ctx.fillText(formatTime(timeLeft), canvasW / 2, timerY + timerH / 2 + 1);
-  ctx.restore();
-
-  // 3. RIGHT: PLAYER SCORES ROSTER
-  ctx.save();
-  let scoreX = canvasW - 16;
-  ctx.font = "700 12px 'Fredoka', sans-serif";
-  ctx.textAlign = "right";
-
-  const displayPlayers = [...players].sort((a, b) => b.score - a.score).slice(0, 4);
-  for (const p of displayPlayers) {
-    const text = `${p.name}: ${p.score} tags`;
-    const w = ctx.measureText(text).width + 16;
-    scoreX -= w + 6;
-
-    ctx.fillStyle = p.isIt ? "rgba(239, 68, 68, 0.3)" : "rgba(255, 255, 255, 0.08)";
-    roundRectPath(ctx, scoreX, 10, w, 28, 8);
-    ctx.fill();
-
-    ctx.strokeStyle = p.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = p.isIt ? "#EF4444" : "#FFFFFF";
-    ctx.textAlign = "left";
-    ctx.fillText(text, scoreX + 8, 28);
-  }
-  ctx.restore();
-
-  // 4. DEDICATED ACTIVE POWER-UP HUD CARD (Floating at bottom center)
+  // DEDICATED ACTIVE POWER-UP HUD CARD (Floating at bottom center)
   renderActivePowerUpCard(ctx, localPlayer, canvasW, window.innerHeight);
 }
 
@@ -1018,8 +869,4 @@ function roundRectPath(
   ctx.closePath();
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+
