@@ -287,7 +287,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     player.name = options.name ?? `P${playerIndex + 1}`;
     player.x = spawn.x;
     player.y = spawn.y;
-    player.isIt = playerIndex === 0;
+    player.isIt = false;
     player.alive = true;
     player.facingX = 1;
     player.facingY = 0;
@@ -320,10 +320,13 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
       this.broadcast("hostUpdate", { hostId: this.hostId ?? "" });
     }
 
-    const itPlayer = playerList(this.s).find(p => p.isIt);
-    if (!itPlayer) {
-      const first = playerList(this.s)[0];
-      first.isIt = true;
+    if (this.s.gameStarted) {
+      const players = playerList(this.s);
+      const itPlayer = players.find(p => p.isIt);
+      if (!itPlayer && players.length > 0) {
+        const randomPlayer = players[Math.floor(Math.random() * players.length)];
+        randomPlayer.isIt = true;
+      }
     }
 
     this.sendLobbyState();
@@ -398,9 +401,12 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     this.s.roundTimeRemaining = this.config.roundLength;
     this.tagLocked = false;
 
-    const initialItId = this.hostId ?? playerList(this.s)[0]?.id ?? "";
+    const players = playerList(this.s);
+    const initialItId = players.length > 0
+      ? players[Math.floor(Math.random() * players.length)].id
+      : "";
     let idx = 0;
-    this.s.players.forEach((player, sessionId) => {
+    this.s.players.forEach((player) => {
       const spawn = this.map.spawnPoints[idx % this.map.spawnPoints.length];
       player.x = spawn.x;
       player.y = spawn.y;

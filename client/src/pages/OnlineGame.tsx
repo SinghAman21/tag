@@ -137,7 +137,7 @@ export default function OnlineGame() {
             const p: PlayerState[] = [];
             if (state.players) {
               state.players.forEach((value: any, key: string) => {
-                p.push(lobbyPlayerToState({ ...value, id: value.id || key }));
+                p.push({ ...lobbyPlayerToState({ ...value, id: value.id || key }), isIt: false });
               });
             }
             setPlayers(p);
@@ -150,7 +150,7 @@ export default function OnlineGame() {
         });
 
         room.onMessage("lobbyState", (data: any) => {
-          setPlayers((data.players ?? []).map(lobbyPlayerToState));
+          setPlayers((data.players ?? []).map((player: any) => ({ ...lobbyPlayerToState(player), isIt: false })));
           setServerHostId(data.hostId ?? "");
           if (data.roomCode) setActualRoomId(String(data.roomCode).toUpperCase().replace(/[^A-Z0-9]/g, ""));
         });
@@ -621,18 +621,7 @@ export default function OnlineGame() {
                           HOST
                         </span>
                       )}
-                      {p.isIt && (
-                        <span style={{
-                          background: "var(--arcade-red)",
-                          color: "#FFFFFF",
-                          fontSize: "0.65rem",
-                          fontWeight: 900,
-                          padding: "0.1rem 0.4rem",
-                          borderRadius: "4px",
-                        }}>
-                          STARTS IT
-                        </span>
-                      )}
+
                     </div>
                   </div>
                 </div>
