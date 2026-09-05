@@ -77,7 +77,7 @@ export default function MainMenu() {
         {/* Mode 1: Local Play */}
         <Link
           to="/local"
-          className="arcade-card"
+          className="arcade-card menu-mode-card"
           style={{
             textDecoration: "none",
             background: "linear-gradient(180deg, #24204A 0%, #1A1738 100%)",
@@ -137,7 +137,7 @@ export default function MainMenu() {
         {/* Mode 2: Create Room */}
         <Link
           to="/create-room"
-          className="arcade-card"
+          className="arcade-card menu-mode-card"
           style={{
             textDecoration: "none",
             background: "linear-gradient(180deg, #24204A 0%, #1A1738 100%)",
@@ -197,7 +197,7 @@ export default function MainMenu() {
         {/* Mode 3: Join Room */}
         <Link
           to="/join-room"
-          className="arcade-card"
+          className="arcade-card menu-mode-card"
           style={{
             textDecoration: "none",
             background: "linear-gradient(180deg, #24204A 0%, #1A1738 100%)",

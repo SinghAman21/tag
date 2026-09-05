@@ -109,6 +109,22 @@
   padding: 1.25rem;
 }
 
+.menu-mode-card:active .arcade-btn {
+  transform: translateY(4px) !important;
+}
+
+.menu-mode-card:active .arcade-btn-green {
+  box-shadow: 0 2px 0 var(--arcade-green-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.menu-mode-card:active .arcade-btn-blue {
+  box-shadow: 0 2px 0 var(--arcade-blue-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.menu-mode-card:active .arcade-btn-red {
+  box-shadow: 0 2px 0 var(--arcade-red-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
 /* 3D Tactile Arcade Buttons */
 .arcade-btn {
   display: inline-flex;
