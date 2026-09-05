@@ -137,27 +137,23 @@ export function renderGame(
   ctx.rect(0, 0, map.width, map.height);
   ctx.clip();
 
-  // 1. BRIGHT CARTOON SKY & BACKGROUND
-  renderSunnyCartoonBackground(ctx, map);
+  // 1. THEMED CARTOON BACKGROUND
+  renderThemedBackground(ctx, map);
 
-  // 2. DECORATIVE BACKGROUND SCENERY (Trees & Bushes - Non-blocking)
+  // 2. DECORATIVE BACKGROUND SCENERY (Non-blocking)
   if (map.scenery) {
     for (const prop of map.scenery) {
-      if (prop.type === "tree") {
-        renderDecorativeTree(ctx, prop.x, prop.y, prop.scale ?? 1);
-      } else if (prop.type === "bush") {
-        renderDecorativeBush(ctx, prop.x, prop.y, prop.scale ?? 1);
-      }
+      renderSceneryProp(ctx, prop.type, prop.x, prop.y, prop.scale ?? 1);
     }
   }
 
-  // 3. OBSTACLES: PLATFORMS & SOLID COVER TREES
+  // 3. OBSTACLES: PLATFORMS & SOLID COVER
   for (const o of map.obstacles) {
     if (o.x < 0 || o.x >= map.width) continue;
     if (o.type === "cover_tree") {
-      renderSolidCoverTree(ctx, o.x, o.y, o.w, o.h);
+      renderSolidCover(ctx, map, o.x, o.y, o.w, o.h);
     } else {
-      renderArcadePlatform(ctx, o.x, o.y, o.w, o.h);
+      renderArcadePlatform(ctx, map, o.x, o.y, o.w, o.h);
     }
   }
 
@@ -372,8 +368,18 @@ export function renderGame(
 }
 
 /* ==========================================================================
-   SUNNY CARTOON BACKGROUND RENDERING
+   THEMED CARTOON BACKGROUND RENDERING
    ========================================================================== */
+function renderThemedBackground(ctx: CanvasRenderingContext2D, map: GameMap) {
+  if (map.theme === "neon_rooftops") {
+    renderNeonRooftopBackground(ctx, map);
+  } else if (map.theme === "desert_ruins") {
+    renderDesertRuinsBackground(ctx, map);
+  } else {
+    renderSunnyCartoonBackground(ctx, map);
+  }
+}
+
 function renderSunnyCartoonBackground(ctx: CanvasRenderingContext2D, map: GameMap) {
   // Bright cheerful blue daylight sky
   const skyGrad = ctx.createLinearGradient(0, 0, 0, map.height);
@@ -415,6 +421,83 @@ function renderSunnyCartoonBackground(ctx: CanvasRenderingContext2D, map: GameMa
   drawCartoonCloud(ctx, map.width * 0.78, 160, 0.85);
 }
 
+function renderNeonRooftopBackground(ctx: CanvasRenderingContext2D, map: GameMap) {
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, map.height);
+  skyGrad.addColorStop(0, "#10051F");
+  skyGrad.addColorStop(0.5, "#26104A");
+  skyGrad.addColorStop(1, "#0F172A");
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, map.width, map.height);
+
+  // Giant moon glow
+  ctx.fillStyle = "rgba(125, 211, 252, 0.18)";
+  ctx.beginPath();
+  ctx.arc(map.width * 0.78, 105, 92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#BAE6FD";
+  ctx.beginPath();
+  ctx.arc(map.width * 0.78, 105, 50, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Distant skyline blocks
+  const horizon = map.height * 0.72;
+  for (let i = 0; i < 11; i++) {
+    const bw = 85 + (i % 3) * 25;
+    const bh = 130 + (i % 4) * 34;
+    const x = i * 118 - 20;
+    ctx.fillStyle = i % 2 === 0 ? "#1E1B4B" : "#312E81";
+    ctx.fillRect(x, horizon - bh, bw, bh);
+
+    ctx.fillStyle = i % 2 === 0 ? "#22D3EE" : "#F0ABFC";
+    for (let wx = x + 14; wx < x + bw - 12; wx += 24) {
+      for (let wy = horizon - bh + 20; wy < horizon - 20; wy += 28) {
+        if ((wx + wy) % 3 !== 0) ctx.fillRect(wx, wy, 9, 12);
+      }
+    }
+  }
+
+  // Neon street haze
+  ctx.fillStyle = "rgba(236, 72, 153, 0.12)";
+  ctx.fillRect(0, horizon - 8, map.width, map.height - horizon + 8);
+}
+
+function renderDesertRuinsBackground(ctx: CanvasRenderingContext2D, map: GameMap) {
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, map.height);
+  skyGrad.addColorStop(0, "#FB923C");
+  skyGrad.addColorStop(0.48, "#FDBA74");
+  skyGrad.addColorStop(1, "#FEF3C7");
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, map.width, map.height);
+
+  // Hot desert sun
+  ctx.fillStyle = "rgba(251, 191, 36, 0.28)";
+  ctx.beginPath();
+  ctx.arc(map.width * 0.18, 120, 95, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#FDE68A";
+  ctx.beginPath();
+  ctx.arc(map.width * 0.18, 120, 48, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Distant dunes
+  ctx.fillStyle = "#FCD34D";
+  ctx.beginPath();
+  ctx.ellipse(map.width * 0.28, map.height * 0.9, map.width * 0.46, 140, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#D97706";
+  ctx.beginPath();
+  ctx.ellipse(map.width * 0.82, map.height * 0.92, map.width * 0.5, 130, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ruined temple silhouettes
+  ctx.fillStyle = "rgba(120, 53, 15, 0.35)";
+  for (let x = 120; x < map.width; x += 320) {
+    ctx.fillRect(x, map.height * 0.5, 36, map.height * 0.24);
+    ctx.fillRect(x + 62, map.height * 0.54, 36, map.height * 0.2);
+    ctx.fillRect(x - 18, map.height * 0.49, 134, 16);
+  }
+}
+
 function drawCartoonCloud(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
   ctx.save();
   ctx.translate(x, y);
@@ -430,8 +513,30 @@ function drawCartoonCloud(ctx: CanvasRenderingContext2D, x: number, y: number, s
 }
 
 /* ==========================================================================
-   DECORATIVE SCENERY (Trees & Bushes - Non-blocking)
+   DECORATIVE SCENERY (Non-blocking)
    ========================================================================== */
+function renderSceneryProp(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, scale = 1) {
+  if (type === "tree") {
+    renderDecorativeTree(ctx, x, y, scale);
+  } else if (type === "bush") {
+    renderDecorativeBush(ctx, x, y, scale);
+  } else if (type === "billboard") {
+    renderBillboard(ctx, x, y, scale);
+  } else if (type === "antenna") {
+    renderAntenna(ctx, x, y, scale);
+  } else if (type === "sign") {
+    renderNeonSign(ctx, x, y, scale);
+  } else if (type === "crate") {
+    renderSupplyCrate(ctx, x, y, scale);
+  } else if (type === "cactus") {
+    renderCactus(ctx, x, y, scale);
+  } else if (type === "rock") {
+    renderRockPile(ctx, x, y, scale);
+  } else if (type === "obelisk") {
+    renderObelisk(ctx, x, y, scale);
+  }
+}
+
 function renderDecorativeTree(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
   ctx.save();
   ctx.translate(x, y);
@@ -489,9 +594,175 @@ function renderDecorativeBush(ctx: CanvasRenderingContext2D, x: number, y: numbe
   ctx.restore();
 }
 
+function renderBillboard(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#0F172A";
+  ctx.fillRect(-42, -70, 84, 48);
+  ctx.strokeStyle = "#22D3EE";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(-42, -70, 84, 48);
+  ctx.fillStyle = "#F0ABFC";
+  ctx.font = "900 13px 'Fredoka', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("TAG!", 0, -42);
+  ctx.fillStyle = "#334155";
+  ctx.fillRect(-24, -22, 10, 22);
+  ctx.fillRect(14, -22, 10, 22);
+  ctx.restore();
+}
+
+function renderAntenna(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.strokeStyle = "#CBD5E1";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -86);
+  ctx.moveTo(-28, -58);
+  ctx.lineTo(28, -78);
+  ctx.moveTo(-22, -78);
+  ctx.lineTo(22, -58);
+  ctx.stroke();
+  ctx.strokeStyle = "#22D3EE";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, -86, 18, -0.7, 0.7);
+  ctx.arc(0, -86, 30, -0.7, 0.7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderNeonSign(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#111827";
+  ctx.beginPath();
+  roundRectPath(ctx, -34, -50, 68, 34, 7);
+  ctx.fill();
+  ctx.strokeStyle = "#EC4899";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.font = "900 18px 'Fredoka', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#67E8F9";
+  ctx.fillText("GO", 0, -27);
+  ctx.restore();
+}
+
+function renderSupplyCrate(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#92400E";
+  ctx.fillRect(-22, -28, 44, 28);
+  ctx.fillStyle = "#B45309";
+  ctx.fillRect(-18, -24, 36, 20);
+  ctx.strokeStyle = "#0F172A";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-22, -28, 44, 28);
+  ctx.beginPath();
+  ctx.moveTo(-18, -24);
+  ctx.lineTo(18, -4);
+  ctx.moveTo(18, -24);
+  ctx.lineTo(-18, -4);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderCactus(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.strokeStyle = "#0F172A";
+  ctx.lineWidth = 3;
+  ctx.fillStyle = "#16A34A";
+  ctx.beginPath();
+  roundRectPath(ctx, -8, -68, 16, 68, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  roundRectPath(ctx, -34, -46, 14, 36, 7);
+  roundRectPath(ctx, 20, -54, 14, 42, 7);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "#86EFAC";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -60);
+  ctx.lineTo(0, -10);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderRockPile(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#78716C";
+  ctx.beginPath();
+  ctx.ellipse(-16, -10, 20, 12, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(10, -13, 24, 15, 0.15, 0, Math.PI * 2);
+  ctx.ellipse(0, -25, 18, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#292524";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderObelisk(ctx: CanvasRenderingContext2D, x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#D6A15D";
+  ctx.beginPath();
+  ctx.moveTo(0, -96);
+  ctx.lineTo(28, -68);
+  ctx.lineTo(20, 0);
+  ctx.lineTo(-20, 0);
+  ctx.lineTo(-28, -68);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#78350F";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.fillRect(-8, -62, 7, 44);
+  ctx.restore();
+}
+
 /* ==========================================================================
    SOLID COVER TREES (Interact with gameplay & block tags)
    ========================================================================== */
+function renderSolidCover(
+  ctx: CanvasRenderingContext2D,
+  map: GameMap,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  if (map.theme === "neon_rooftops") {
+    renderSolidNeonColumn(ctx, x, y, w, h);
+  } else if (map.theme === "desert_ruins") {
+    renderSolidStonePillar(ctx, x, y, w, h);
+  } else {
+    renderSolidCoverTree(ctx, x, y, w, h);
+  }
+}
+
 function renderSolidCoverTree(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -558,11 +829,67 @@ function renderSolidCoverTree(
   ctx.restore();
 }
 
+function renderSolidNeonColumn(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const cx = x + w / 2;
+  ctx.save();
+  ctx.fillStyle = "#111827";
+  ctx.beginPath();
+  roundRectPath(ctx, x - 3, y, w + 6, h, 5);
+  ctx.fill();
+  ctx.strokeStyle = "#22D3EE";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(236, 72, 153, 0.7)";
+  ctx.fillRect(cx - 3, y + 8, 6, h - 18);
+  ctx.fillStyle = "#0F172A";
+  ctx.beginPath();
+  roundRectPath(ctx, cx - 22, y + 15, 44, 18, 5);
+  ctx.fill();
+  ctx.strokeStyle = "#F0ABFC";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.font = "900 9px 'Fredoka', sans-serif";
+  ctx.fillStyle = "#F0ABFC";
+  ctx.textAlign = "center";
+  ctx.fillText("COVER 🛡️", cx, y + 27);
+  ctx.restore();
+}
+
+function renderSolidStonePillar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const cx = x + w / 2;
+  ctx.save();
+  ctx.fillStyle = "#A16207";
+  ctx.fillRect(x - 6, y + h - 10, w + 12, 10);
+  ctx.fillStyle = "#D6A15D";
+  ctx.beginPath();
+  roundRectPath(ctx, x, y, w, h - 8, 4);
+  ctx.fill();
+  ctx.fillStyle = "rgba(120, 53, 15, 0.25)";
+  ctx.fillRect(x + 5, y + 8, 5, h - 24);
+  ctx.fillRect(x + w - 11, y + 12, 5, h - 28);
+  ctx.strokeStyle = "#78350F";
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(x, y, w, h - 8);
+  ctx.fillStyle = "#451A03";
+  ctx.beginPath();
+  roundRectPath(ctx, cx - 22, y + 14, 44, 18, 5);
+  ctx.fill();
+  ctx.strokeStyle = "#FDE68A";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.font = "900 9px 'Fredoka', sans-serif";
+  ctx.fillStyle = "#FDE68A";
+  ctx.textAlign = "center";
+  ctx.fillText("COVER 🛡️", cx, y + 26);
+  ctx.restore();
+}
+
 /* ==========================================================================
-   CHUNKY ARCADE PLATFORMS (Lush Green Grass Top + Solid Base)
+   CHUNKY ARCADE PLATFORMS
    ========================================================================== */
 function renderArcadePlatform(
   ctx: CanvasRenderingContext2D,
+  map: GameMap,
   x: number,
   y: number,
   w: number,
@@ -570,6 +897,11 @@ function renderArcadePlatform(
 ) {
   const turfH = 9;
   const bodyH = h - turfH;
+  const palette = map.theme === "neon_rooftops"
+    ? { body: "#1E1B4B", shade: "#0F172A", top: "#22D3EE", teeth: "#EC4899", outline: "#0E0C22" }
+    : map.theme === "desert_ruins"
+      ? { body: "#A16207", shade: "#78350F", top: "#FCD34D", teeth: "#D97706", outline: "#451A03" }
+      : { body: "#78350F", shade: "#451A03", top: "#22C55E", teeth: "#15803D", outline: "#0E0C22" };
 
   // Platform 3D Drop Shadow
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
@@ -577,18 +909,18 @@ function renderArcadePlatform(
   roundRectPath(ctx, x, y + 4, w, h, 6);
   ctx.fill();
 
-  // Platform Sturdy Body (Warm layered wood & stone)
-  ctx.fillStyle = "#78350F";
+  // Platform sturdy body
+  ctx.fillStyle = palette.body;
   ctx.beginPath();
   roundRectPath(ctx, x, y + turfH, w, bodyH, 5);
   ctx.fill();
 
   // Darker lower half for 3D depth
-  ctx.fillStyle = "#451A03";
+  ctx.fillStyle = palette.shade;
   ctx.fillRect(x, y + turfH + bodyH * 0.5, w, bodyH * 0.5);
 
-  // Platform Turf / Walkable Top (Bright Lush Green)
-  ctx.fillStyle = "#22C55E";
+  // Platform walkable top
+  ctx.fillStyle = palette.top;
   ctx.beginPath();
   roundRectPath(ctx, x, y, w, turfH + 3, 5);
   ctx.fill();
@@ -597,8 +929,8 @@ function renderArcadePlatform(
   ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
   ctx.fillRect(x + 4, y + 1, w - 8, 2.5);
 
-  // Stylized grass teeth overhang
-  ctx.fillStyle = "#15803D";
+  // Stylized top-edge teeth/trim overhang
+  ctx.fillStyle = palette.teeth;
   for (let px = x + 8; px < x + w - 8; px += 16) {
     ctx.beginPath();
     ctx.moveTo(px, y + turfH);
@@ -608,7 +940,7 @@ function renderArcadePlatform(
   }
 
   // Crisp outline
-  ctx.strokeStyle = "#0E0C22";
+  ctx.strokeStyle = palette.outline;
   ctx.lineWidth = 2.5;
   ctx.strokeRect(x, y, w, h);
 }

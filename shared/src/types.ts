@@ -43,8 +43,10 @@ export interface Obstacle {
   type?: "platform" | "cover_tree" | "wall";
 }
 
+export type MapTheme = "skyline" | "neon_rooftops" | "desert_ruins";
+
 export interface SceneryProp {
-  type: "tree" | "bush" | "cloud" | "sign";
+  type: "tree" | "bush" | "cloud" | "sign" | "billboard" | "antenna" | "crate" | "cactus" | "rock" | "obelisk";
   x: number;
   y: number;
   scale?: number;
@@ -52,6 +54,7 @@ export interface SceneryProp {
 
 export interface GameMap {
   name: string;
+  theme?: MapTheme;
   width: number;
   height: number;
   obstacles: Obstacle[];
