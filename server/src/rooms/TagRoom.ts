@@ -197,6 +197,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private powerUpInterval: ReturnType<typeof setInterval> | null = null;
   private lastTick = Date.now();
+  private lastFrameBroadcast = 0;
   private playerInputs: Map<string, InputState> = new Map();
   private tagLocked = false;
   private hostId: string | null = null;
@@ -224,7 +225,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     state.powerUpsEnabled = this.config.powerUpsEnabled;
     state.gameStarted = false;
     this.setState(state);
-    this.setPatchRate(1000 / 20);
+    this.setPatchRate(250);
 
     this.onMessage("input", (client: Client, data: InputState) => {
       this.playerInputs.set(client.sessionId, data);
@@ -345,6 +346,53 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
   }
 
 
+  private sendGameFrame() {
+    this.broadcast("gameFrame", {
+      hostId: this.hostId ?? "",
+      roomCode: this.metadata?.roomCode ?? "",
+      gameStarted: this.s.gameStarted,
+      roundTimeRemaining: this.s.roundTimeRemaining,
+      roundLength: this.s.roundLength,
+      mapName: this.s.mapName,
+      powerUpsEnabled: this.s.powerUpsEnabled,
+      players: serializePlayers(this.s),
+      spawns: (() => {
+        const out: Array<{ id: string; type: number; x: number; y: number; respawnTimer: number }> = [];
+        this.s.spawns.forEach(s => out.push({
+          id: s.id,
+          type: s.type,
+          x: s.x,
+          y: s.y,
+          respawnTimer: s.respawnTimer,
+        }));
+        return out;
+      })(),
+      stickyPatches: (() => {
+        const out: Array<{ id: string; x: number; y: number; remainingMs: number }> = [];
+        this.s.stickyPatches.forEach(s => out.push({
+          id: s.id,
+          x: s.x,
+          y: s.y,
+          remainingMs: s.remainingMs,
+        }));
+        return out;
+      })(),
+      decoys: (() => {
+        const out: Array<{ id: string; ownerId: string; x: number; y: number; vx: number; vy: number; remainingMs: number }> = [];
+        this.s.decoys.forEach(d => out.push({
+          id: d.id,
+          ownerId: d.ownerId,
+          x: d.x,
+          y: d.y,
+          vx: d.vx,
+          vy: d.vy,
+          remainingMs: d.remainingMs,
+        }));
+        return out;
+      })(),
+    });
+  }
+
   startGame() {
     this.s.gameStarted = true;
     this.s.roundTimeRemaining = this.config.roundLength;
@@ -374,6 +422,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     this.s.decoys.clear();
 
     this.lastTick = Date.now();
+    this.lastFrameBroadcast = 0;
 
     this.tickInterval = setInterval(() => this.gameTick(), 1000 / 30);
     if (this.config.powerUpsEnabled) {
@@ -381,6 +430,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     }
 
     this.sendLobbyState();
+    this.sendGameFrame();
     this.broadcast("gameStarted", {});
   }
 
@@ -559,6 +609,10 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
       }
     }
 
+    if (now - this.lastFrameBroadcast >= 1000 / 20) {
+      this.lastFrameBroadcast = now;
+      this.sendGameFrame();
+    }
   }
 
   activatePowerUp(player: PlayerSchema, type: PowerUpType) {

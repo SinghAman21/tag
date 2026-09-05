@@ -72,6 +72,7 @@ export default function OnlineGame() {
 
   const clientRef = useRef<Colyseus.Client | null>(null);
   const roomRef = useRef<Colyseus.Room | null>(null);
+  const gameFrameRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef<Record<string, boolean>>({});
   const lastInputRef = useRef<string>("");
@@ -152,6 +153,11 @@ export default function OnlineGame() {
           setServerHostId(data.hostId ?? "");
           if (data.roomCode) setActualRoomId(String(data.roomCode).toUpperCase().replace(/[^A-Z0-9]/g, ""));
         });
+        room.onMessage("gameFrame", (frame: any) => {
+          gameFrameRef.current = frame;
+          if (frame.hostId) setServerHostId(frame.hostId);
+          if (frame.roomCode) setActualRoomId(String(frame.roomCode).toUpperCase().replace(/[^A-Z0-9]/g, ""));
+        });
         room.send("requestLobbyState");
 
         room.onMessage("gameStarted", () => {
@@ -187,6 +193,7 @@ export default function OnlineGame() {
     connect();
 
     return () => {
+      gameFrameRef.current = null;
       roomRef.current?.leave();
       clientRef.current = null;
       roomRef.current = null;
@@ -244,7 +251,7 @@ export default function OnlineGame() {
         canvas.height = window.innerHeight;
       }
 
-      const state = room.state;
+      const state = gameFrameRef.current ?? room.state;
       const map = MAPS[state.mapName] ?? MAPS.arena;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -254,7 +261,20 @@ export default function OnlineGame() {
         e.remainingMs -= 16;
         return e.remainingMs > 0;
       });
-      const renderState = { ...state, events: eventsRef.current };
+      const renderState = {
+        players: state.players,
+        spawns: state.spawns,
+        stickyPatches: state.stickyPatches,
+        decoys: state.decoys,
+        hostId: state.hostId,
+        gameStarted: state.gameStarted,
+        roundTimeRemaining: state.roundTimeRemaining,
+        roundLength: state.roundLength,
+        mapName: state.mapName,
+        roundLengthNum: state.roundLengthNum,
+        powerUpsEnabled: state.powerUpsEnabled,
+        events: eventsRef.current,
+      };
 
       const playerList = extractPlayers(state.players);
       const myIndex = playerList.findIndex(p => p.id === room.sessionId || p.name === myName);
