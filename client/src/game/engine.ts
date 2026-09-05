@@ -54,7 +54,6 @@ export interface LocalPlayerInput {
   down: boolean;
   left: boolean;
   right: boolean;
-  usePowerUp: boolean;
 }
 
 const ZERO_INPUT: LocalPlayerInput = {
@@ -62,7 +61,6 @@ const ZERO_INPUT: LocalPlayerInput = {
   down: false,
   left: false,
   right: false,
-  usePowerUp: false,
 };
 
 export function createLocalGame(

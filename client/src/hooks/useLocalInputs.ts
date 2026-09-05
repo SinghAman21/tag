@@ -3,16 +3,16 @@ import { useEffect, useRef, useCallback } from "react";
 export type KeyState = Record<string, boolean>;
 
 const PLAYER_KEYS = [
-  { up: "w", down: "s", left: "a", right: "d", usePowerUp: "e" },
-  { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight", usePowerUp: "Enter" },
-  { up: "t", down: "g", left: "f", right: "h", usePowerUp: "r" },
-  { up: "8", down: "5", left: "4", right: "6", usePowerUp: "0" },
+  { up: "w", down: "s", left: "a", right: "d" },
+  { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" },
+  { up: "t", down: "g", left: "f", right: "h" },
+  { up: "8", down: "5", left: "4", right: "6" },
 ];
 
 export function useLocalInputs(numPlayers: number) {
   const keysRef = useRef<KeyState>({});
-  const inputsRef = useRef<{ up: boolean; down: boolean; left: boolean; right: boolean; usePowerUp: boolean }[]>(
-    Array.from({ length: 4 }, () => ({ up: false, down: false, left: false, right: false, usePowerUp: false }))
+  const inputsRef = useRef<{ up: boolean; down: boolean; left: boolean; right: boolean }[]>(
+    Array.from({ length: 4 }, () => ({ up: false, down: false, left: false, right: false }))
   );
 
   useEffect(() => {
@@ -44,10 +44,7 @@ export function useLocalInputs(numPlayers: number) {
         down: !!keys[pk.down],
         left: !!keys[pk.left],
         right: !!keys[pk.right],
-        usePowerUp: !!keys[pk.usePowerUp],
       };
-      // Reset usePowerUp so it's one-shot
-      keys[pk.usePowerUp] = false;
     }
     return inputsRef.current;
   }, [numPlayers]);
@@ -56,8 +53,8 @@ export function useLocalInputs(numPlayers: number) {
 }
 
 export const KEY_BINDINGS = [
-  { label: "WASD + E", keys: "A/D move, W jump, E power-up" },
-  { label: "Arrows + Enter", keys: "Left/Right move, Up jump, Enter power-up" },
-  { label: "TFGH + R", keys: "F/H move, T jump, R power-up" },
-  { label: "Numpad + 0", keys: "4/6 move, 8 jump, 0 power-up" },
+  { label: "WASD", keys: "A/D move, W jump" },
+  { label: "Arrows", keys: "Left/Right move, Up jump" },
+  { label: "TFGH", keys: "F/H move, T jump" },
+  { label: "Numpad", keys: "4/6 move, 8 jump" },
 ];

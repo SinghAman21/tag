@@ -19,10 +19,10 @@ import Keycap from "../components/Keycap.js";
 const MAP_KEYS = Object.keys(MAPS);
 
 const PLAYER_KEY_INFO = [
-  { move: ["A", "D"], jump: "W", powerUp: "E" },
-  { move: ["◀", "▶"], jump: "▲", powerUp: "↵" },
-  { move: ["F", "H"], jump: "T", powerUp: "R" },
-  { move: ["4", "6"], jump: "8", powerUp: "0" },
+  { move: ["A", "D"], jump: "W" },
+  { move: ["◀", "▶"], jump: "▲" },
+  { move: ["F", "H"], jump: "T" },
+  { move: ["4", "6"], jump: "8" },
 ];
 
 export default function LocalPlay() {
@@ -411,11 +411,6 @@ export default function LocalPlay() {
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 700 }}>Move</span>
                   </div>
 
-                  {/* Power-up key */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <Keycap label={keys.powerUp} size="sm" special />
-                    <span style={{ fontSize: "0.75rem", color: "var(--arcade-yellow)", fontWeight: 800 }}>Skill</span>
-                  </div>
                 </div>
               </div>
             );

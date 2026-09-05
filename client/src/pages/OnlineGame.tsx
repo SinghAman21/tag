@@ -72,9 +72,10 @@ export default function OnlineGame() {
 
   const clientRef = useRef<Colyseus.Client | null>(null);
   const roomRef = useRef<Colyseus.Room | null>(null);
-  const gameFrameRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef<Record<string, boolean>>({});
+  const lastInputRef = useRef<string>("");
+  const lastInputSentAtRef = useRef(0);
   const rafRef = useRef<number>(0);
   const connectedRef = useRef(false);
   const eventsRef = useRef<any[]>([]);
@@ -124,15 +125,21 @@ export default function OnlineGame() {
         }
 
         const syncState = (state: any) => {
-          const p: PlayerState[] = [];
-          if (state.players) {
-            state.players.forEach((value: any, key: string) => {
-              p.push(lobbyPlayerToState({ ...value, id: value.id || key }));
-            });
-          }
-          setPlayers(p);
+          const gameStarted = !!state.gameStarted;
           setServerHostId(state.hostId ?? "");
-          setStatus(state.gameStarted ? "playing" : "lobby");
+          setStatus(gameStarted ? "playing" : "lobby");
+
+          // During gameplay the canvas reads Colyseus' patched room.state directly.
+          // Updating React player state for every patch causes avoidable rerenders/stutter.
+          if (!gameStarted) {
+            const p: PlayerState[] = [];
+            if (state.players) {
+              state.players.forEach((value: any, key: string) => {
+                p.push(lobbyPlayerToState({ ...value, id: value.id || key }));
+              });
+            }
+            setPlayers(p);
+          }
         };
 
         room.onStateChange(syncState);
@@ -144,12 +151,6 @@ export default function OnlineGame() {
           setPlayers((data.players ?? []).map(lobbyPlayerToState));
           setServerHostId(data.hostId ?? "");
           if (data.roomCode) setActualRoomId(String(data.roomCode).toUpperCase().replace(/[^A-Z0-9]/g, ""));
-        });
-        room.onMessage("gameFrame", (frame: any) => {
-          gameFrameRef.current = frame;
-          setPlayers((frame.players ?? []).map(lobbyPlayerToState));
-          setServerHostId(frame.hostId ?? "");
-          if (frame.roomCode) setActualRoomId(String(frame.roomCode).toUpperCase().replace(/[^A-Z0-9]/g, ""));
         });
         room.send("requestLobbyState");
 
@@ -186,7 +187,6 @@ export default function OnlineGame() {
     connect();
 
     return () => {
-      gameFrameRef.current = null;
       roomRef.current?.leave();
       clientRef.current = null;
       roomRef.current = null;
@@ -214,14 +214,19 @@ export default function OnlineGame() {
       const room = roomRef.current;
       if (!room) return;
       const k = keysRef.current;
-      room.send("input", {
+      const input = {
         up: !!k["w"] || !!k["ArrowUp"] || !!k["8"],
         down: !!k["s"] || !!k["ArrowDown"] || !!k["5"],
         left: !!k["a"] || !!k["ArrowLeft"] || !!k["4"],
         right: !!k["d"] || !!k["ArrowRight"] || !!k["6"],
-        usePowerUp: !!k["e"],
-      });
-      keysRef.current["e"] = false;
+      };
+      const serialized = `${input.up ? 1 : 0}${input.down ? 1 : 0}${input.left ? 1 : 0}${input.right ? 1 : 0}`;
+      const now = performance.now();
+      if (serialized !== lastInputRef.current || now - lastInputSentAtRef.current > 250) {
+        room.send("input", input);
+        lastInputRef.current = serialized;
+        lastInputSentAtRef.current = now;
+      }
     };
 
     const inputInterval = setInterval(sendInput, 1000 / 30);
@@ -239,7 +244,7 @@ export default function OnlineGame() {
         canvas.height = window.innerHeight;
       }
 
-      const state = gameFrameRef.current ?? room.state;
+      const state = room.state;
       const map = MAPS[state.mapName] ?? MAPS.arena;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -249,14 +254,14 @@ export default function OnlineGame() {
         e.remainingMs -= 16;
         return e.remainingMs > 0;
       });
-      state.events = eventsRef.current;
+      const renderState = { ...state, events: eventsRef.current };
 
       const playerList = extractPlayers(state.players);
       const myIndex = playerList.findIndex(p => p.id === room.sessionId || p.name === myName);
 
       // Unified responsive renderer
-      renderGame(ctx, state, canvas.width, canvas.height, map);
-      renderHUD(ctx, state, canvas.width, myIndex >= 0 ? myIndex : 0);
+      renderGame(ctx, renderState, canvas.width, canvas.height, map);
+      renderHUD(ctx, renderState, canvas.width, myIndex >= 0 ? myIndex : 0);
 
       rafRef.current = requestAnimationFrame(gameLoop);
     };
