@@ -1,0 +1,338 @@
+/* ==========================================================================
+   CHASE TAG - ARCADE DESIGN SYSTEM
+   ========================================================================== */
+
+:root {
+  /* Vibrant Arcade Palette */
+  --arcade-yellow: #FFD13B;
+  --arcade-yellow-shadow: #D4A30B;
+  --arcade-yellow-glow: rgba(255, 209, 59, 0.4);
+
+  --arcade-red: #FF4757;
+  --arcade-red-shadow: #C42635;
+  --arcade-red-glow: rgba(255, 71, 87, 0.4);
+
+  --arcade-green: #2ED573;
+  --arcade-green-shadow: #1F9B51;
+  --arcade-green-glow: rgba(46, 213, 115, 0.4);
+
+  --arcade-blue: #1E90FF;
+  --arcade-blue-shadow: #0C65C0;
+  --arcade-blue-glow: rgba(30, 144, 255, 0.4);
+
+  --arcade-purple: #9C88FF;
+  --arcade-purple-shadow: #6F5BD0;
+  --arcade-purple-glow: rgba(156, 136, 255, 0.4);
+
+  --arcade-pink: #FF6584;
+  --arcade-pink-shadow: #CF3A5B;
+
+  /* Surfaces & Outlines */
+  --bg-dark: #121026;
+  --bg-card: #201D40;
+  --bg-card-hover: #292552;
+  --bg-card-inner: #161430;
+  --border-dark: #0D0B1C;
+  --border-arcade: #383464;
+  --text-white: #FFFFFF;
+  --text-dim: #A4A0CC;
+  --text-muted: #6F6B99;
+}
+
+/* Background Atmosphere */
+.arcade-bg {
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  background-image: 
+    radial-gradient(circle at 15% 20%, rgba(156, 136, 255, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 85% 75%, rgba(255, 71, 87, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(46, 213, 115, 0.08) 0%, transparent 60%),
+    radial-gradient(#2d2859 1.5px, transparent 1.5px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 32px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Floating animated background shapes */
+.arcade-shape {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.25;
+  filter: blur(1px);
+  animation: floatSlow 8s ease-in-out infinite alternate;
+}
+
+@keyframes floatSlow {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-24px) rotate(18deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px var(--arcade-yellow-glow)); }
+  50% { transform: scale(1.03); filter: drop-shadow(0 0 20px var(--arcade-yellow-glow)); }
+}
+
+@keyframes bobTitle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes tagAlarm {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* Chunky Arcade Card Frame */
+.arcade-card {
+  background: var(--bg-card);
+  border: 4px solid var(--border-dark);
+  border-radius: 24px;
+  box-shadow: 
+    0 10px 0 var(--border-dark),
+    0 20px 30px rgba(0, 0, 0, 0.5);
+  padding: 2rem;
+  width: 100%;
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.arcade-card-inner {
+  background: var(--bg-card-inner);
+  border: 3px solid var(--border-dark);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+/* 3D Tactile Arcade Buttons */
+.arcade-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1.6rem;
+  border-radius: 16px;
+  border: 3px solid var(--border-dark);
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  position: relative;
+}
+
+.arcade-btn:active:not(:disabled) {
+  transform: translateY(4px) !important;
+}
+
+.arcade-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+/* Button Variants */
+.arcade-btn-yellow {
+  background: linear-gradient(180deg, #FFE066 0%, var(--arcade-yellow) 100%);
+  color: #3b2800;
+  box-shadow: 0 6px 0 var(--arcade-yellow-shadow), 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+.arcade-btn-yellow:hover:not(:disabled) {
+  background: linear-gradient(180deg, #FFF099 0%, #FED54F 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 0 var(--arcade-yellow-shadow), 0 12px 18px rgba(0, 0, 0, 0.35);
+}
+.arcade-btn-yellow:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--arcade-yellow-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.arcade-btn-green {
+  background: linear-gradient(180deg, #4FE48F 0%, var(--arcade-green) 100%);
+  color: #083416;
+  box-shadow: 0 6px 0 var(--arcade-green-shadow), 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+.arcade-btn-green:hover:not(:disabled) {
+  background: linear-gradient(180deg, #6DF0A5 0%, #39DC7C 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 0 var(--arcade-green-shadow), 0 12px 18px rgba(0, 0, 0, 0.35);
+}
+.arcade-btn-green:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--arcade-green-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.arcade-btn-red {
+  background: linear-gradient(180deg, #FF6B7A 0%, var(--arcade-red) 100%);
+  color: #FFFFFF;
+  text-shadow: 0 2px 0 #9E1320;
+  box-shadow: 0 6px 0 var(--arcade-red-shadow), 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+.arcade-btn-red:hover:not(:disabled) {
+  background: linear-gradient(180deg, #FF8A96 0%, #FF5667 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 0 var(--arcade-red-shadow), 0 12px 18px rgba(0, 0, 0, 0.35);
+}
+.arcade-btn-red:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--arcade-red-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.arcade-btn-blue {
+  background: linear-gradient(180deg, #4BA7FF 0%, var(--arcade-blue) 100%);
+  color: #FFFFFF;
+  text-shadow: 0 2px 0 #08498C;
+  box-shadow: 0 6px 0 var(--arcade-blue-shadow), 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+.arcade-btn-blue:hover:not(:disabled) {
+  background: linear-gradient(180deg, #6BB7FF 0%, #2998FF 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 0 var(--arcade-blue-shadow), 0 12px 18px rgba(0, 0, 0, 0.35);
+}
+.arcade-btn-blue:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--arcade-blue-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.arcade-btn-purple {
+  background: linear-gradient(180deg, #B5A5FF 0%, var(--arcade-purple) 100%);
+  color: #FFFFFF;
+  text-shadow: 0 2px 0 #523FA8;
+  box-shadow: 0 6px 0 var(--arcade-purple-shadow), 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+.arcade-btn-purple:hover:not(:disabled) {
+  background: linear-gradient(180deg, #C5B8FF 0%, #A492FF 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 0 var(--arcade-purple-shadow), 0 12px 18px rgba(0, 0, 0, 0.35);
+}
+.arcade-btn-purple:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--arcade-purple-shadow), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.arcade-btn-secondary {
+  background: #2D2952;
+  color: var(--text-dim);
+  border: 3px solid var(--border-dark);
+  box-shadow: 0 5px 0 var(--border-dark);
+}
+.arcade-btn-secondary:hover:not(:disabled) {
+  background: #373363;
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 var(--border-dark);
+}
+.arcade-btn-secondary:active:not(:disabled) {
+  box-shadow: 0 2px 0 var(--border-dark);
+}
+
+/* Mechanical Keyboard Keycaps */
+.arcade-keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  background: #FFFFFF;
+  color: #17152B;
+  border: 2px solid #0D0B1C;
+  border-radius: 7px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 0.82rem;
+  box-shadow: 0 3px 0 #A6A4BD, 0 4px 6px rgba(0,0,0,0.25);
+  user-select: none;
+  text-align: center;
+}
+
+.arcade-keycap-sm {
+  min-width: 24px;
+  height: 24px;
+  font-size: 0.72rem;
+  padding: 0 4px;
+  box-shadow: 0 2px 0 #A6A4BD;
+}
+
+.arcade-keycap-special {
+  background: var(--arcade-yellow);
+  color: #3b2800;
+  box-shadow: 0 3px 0 var(--arcade-yellow-shadow);
+}
+
+/* Input Fields */
+.arcade-input {
+  width: 100%;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 0.8rem 1rem;
+  background: var(--bg-card-inner);
+  border: 3px solid var(--border-dark);
+  border-radius: 14px;
+  color: #FFFFFF;
+  outline: none;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.arcade-input:focus {
+  border-color: var(--arcade-blue);
+  box-shadow: inset 0 3px 6px rgba(0,0,0,0.4), 0 0 0 3px var(--arcade-blue-glow);
+}
+
+/* Chunky Selection Chips */
+.arcade-chip {
+  padding: 0.65rem 1.1rem;
+  border-radius: 12px;
+  border: 3px solid var(--border-dark);
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  background: var(--bg-card-inner);
+  color: var(--text-dim);
+  box-shadow: 0 4px 0 var(--border-dark);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.arcade-chip:hover {
+  color: #FFFFFF;
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 var(--border-dark);
+}
+
+.arcade-chip.selected {
+  background: var(--arcade-yellow);
+  color: #382400;
+  box-shadow: 0 4px 0 var(--arcade-yellow-shadow);
+  transform: translateY(2px);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-card-inner);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-arcade);
+  border: 2px solid var(--bg-card-inner);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--arcade-blue);
+}

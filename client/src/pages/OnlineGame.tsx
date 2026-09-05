@@ -3,17 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import * as Colyseus from "colyseus.js";
 import {
   type PlayerState,
-  type PowerUpSpawn,
-  type StickyPatch,
-  type Decoy,
-  type GameMap,
   MAPS,
-  PLAYER_COLORS,
-  POWER_UP_CONFIGS,
   POWER_UP_INDEX_TO_TYPE,
-  PLAYER_SIZE,
-  HUD_HEIGHT,
 } from "chase-tag-shared";
+import { renderGame, renderHUD, extractPlayers } from "../game/renderer.js";
+import ArcadeButton from "../components/ArcadeButton.js";
 
 const COLYSEUS_URL = import.meta.env.VITE_COLYSEUS_URL || "ws://localhost:2567";
 const ROOM_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -41,9 +35,9 @@ function lobbyPlayerToState(player: any): PlayerState {
     score: player.score ?? 0,
     ready: !!player.ready,
     activePowerUp: player.activePowerUpType >= 0 ? {
-      type: POWER_UP_INDEX_TO_TYPE[player.activePowerUpType],
-      remainingMs: player.activePowerUpRemaining,
-      durationMs: player.activePowerUpDuration,
+      type: POWER_UP_INDEX_TO_TYPE[player.activePowerUpType] ?? "speed_surge",
+      remainingMs: player.activePowerUpRemaining ?? 0,
+      durationMs: player.activePowerUpDuration ?? 1,
     } : null,
     powerUpCooldown: player.powerUpCooldown ?? 0,
     heldPowerUp: player.heldPowerUp >= 0 ? POWER_UP_INDEX_TO_TYPE[player.heldPowerUp] : null,
@@ -74,6 +68,7 @@ export default function OnlineGame() {
   const [actualRoomId, setActualRoomId] = useState(normalizedRoomCode);
   const [serverHostId, setServerHostId] = useState("");
   const [connectionError, setConnectionError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const clientRef = useRef<Colyseus.Client | null>(null);
   const roomRef = useRef<Colyseus.Room | null>(null);
@@ -82,6 +77,7 @@ export default function OnlineGame() {
   const keysRef = useRef<Record<string, boolean>>({});
   const rafRef = useRef<number>(0);
   const connectedRef = useRef(false);
+  const eventsRef = useRef<any[]>([]);
 
   useEffect(() => {
     const connect = async () => {
@@ -162,11 +158,23 @@ export default function OnlineGame() {
           setStatus("playing");
         });
 
+        room.onMessage("tag", (data: any) => {
+          eventsRef.current.push({
+            id: `ev_${Date.now()}`,
+            type: "tag",
+            text: "👑 TAGGED!",
+            x: 800,
+            y: 450,
+            color: "#EF4444",
+            remainingMs: 1500,
+            maxMs: 1500,
+          });
+        });
+
         room.onMessage("roundEnd", (data: any) => {
           setRoundResult(data);
           setStatus("ended");
         });
-
 
       } catch (err) {
         console.error("Failed to connect:", err);
@@ -198,6 +206,7 @@ export default function OnlineGame() {
     const handleUp = (e: KeyboardEvent) => {
       keysRef.current[e.key] = false;
     };
+
     window.addEventListener("keydown", handleDown);
     window.addEventListener("keyup", handleUp);
 
@@ -225,16 +234,29 @@ export default function OnlineGame() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
 
       const state = gameFrameRef.current ?? room.state;
       const map = MAPS[state.mapName] ?? MAPS.arena;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      renderOnlineHUD(ctx, state, canvas.width);
-      renderOnlineGame(ctx, state, canvas.width, canvas.height, map);
+      // Decay online events
+      eventsRef.current = eventsRef.current.filter(e => {
+        e.remainingMs -= 16;
+        return e.remainingMs > 0;
+      });
+      state.events = eventsRef.current;
+
+      const playerList = extractPlayers(state.players);
+      const myIndex = playerList.findIndex(p => p.id === room.sessionId || p.name === myName);
+
+      // Unified responsive renderer
+      renderGame(ctx, state, canvas.width, canvas.height, map);
+      renderHUD(ctx, state, canvas.width, myIndex >= 0 ? myIndex : 0);
 
       rafRef.current = requestAnimationFrame(gameLoop);
     };
@@ -255,343 +277,428 @@ export default function OnlineGame() {
     roomRef.current?.send("startGame");
   }, []);
 
+  const handleCopyCode = () => {
+    if (!actualRoomId) return;
+    navigator.clipboard?.writeText(actualRoomId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // 1. CONNECTING VIEW
   if (status === "connecting") {
     return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Connecting...</h2>
-          <p style={styles.hint}>{connectionError || `Make sure the Colyseus server is running on ${COLYSEUS_URL}`}</p>
-          <button onClick={() => navigate("/")} style={styles.backBtn}>Back to Menu</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "ended" && roundResult) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Round Over!</h2>
-          <p style={{ color: "#FFE66D", fontSize: "1.1rem", marginBottom: "0.5rem" }}>
-            {roundResult.loserName} was "It" when time ran out!
+      <div className="arcade-bg">
+        <div className="arcade-card" style={{ maxWidth: "460px", textAlign: "center" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }} className="arcade-btn-pulse">
+            📡
+          </div>
+          <h2 style={{
+            fontFamily: "'Fredoka', sans-serif",
+            fontSize: "2rem",
+            fontWeight: 800,
+            color: "#FFFFFF",
+            margin: "0 0 0.8rem 0",
+          }}>
+            Connecting to Arena...
+          </h2>
+          <p style={{ color: "var(--text-dim)", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
+            {connectionError || `Contacting Colyseus server on ${COLYSEUS_URL}`}
           </p>
-          <div style={{ marginBottom: "1rem" }}>
-            {roundResult.scores?.map((s: any) => (
-              <div key={s.id} style={{ color: s.wasIt ? "#FF6B6B" : "#4ECDC4", padding: "0.3rem 0" }}>
-                {s.name}: {s.score} tags {s.wasIt ? "(was IT)" : ""}
+
+          {connectionError ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={{
+                background: "rgba(255, 71, 87, 0.15)",
+                border: "2px solid var(--arcade-red)",
+                borderRadius: "10px",
+                color: "var(--arcade-red)",
+                padding: "0.75rem",
+                fontWeight: 700,
+                fontSize: "0.9rem",
+              }}>
+                Could not reach the game server. Ensure <code>npm run dev:server</code> is running!
               </div>
-            ))}
+              <ArcadeButton color="secondary" size="md" onClick={() => navigate("/")}>
+                ← BACK TO MENU
+              </ArcadeButton>
+            </div>
+          ) : (
+            <div style={{
+              display: "inline-block",
+              padding: "0.6rem 1.4rem",
+              background: "var(--bg-card-inner)",
+              border: "2px solid var(--border-arcade)",
+              borderRadius: "999px",
+              color: "var(--arcade-yellow)",
+              fontWeight: 800,
+              fontSize: "0.9rem",
+            }}>
+              ESTABLISHING WEBSOCKET CONNECTION...
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. ROUND END VIEW
+  if (status === "ended" && roundResult) {
+    const sortedScores = [...(roundResult.scores ?? [])].sort((a: any, b: any) => b.score - a.score);
+
+    return (
+      <div className="arcade-bg">
+        <div className="arcade-card" style={{ maxWidth: "560px", textAlign: "center" }}>
+          <div style={{
+            display: "inline-block",
+            background: "var(--arcade-yellow)",
+            color: "#3A2800",
+            padding: "0.3rem 1.2rem",
+            borderRadius: "999px",
+            border: "3px solid #0D0B1C",
+            fontWeight: 900,
+            fontSize: "0.95rem",
+            letterSpacing: "0.08em",
+            boxShadow: "0 4px 0 #D4A30B",
+            marginBottom: "1rem",
+          }}>
+            MATCH COMPLETE!
           </div>
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+
+          <h1 style={{
+            fontFamily: "'Fredoka', sans-serif",
+            fontSize: "3rem",
+            fontWeight: 900,
+            color: "#FFFFFF",
+            margin: "0 0 1.2rem 0",
+          }}>
+            ROUND OVER!
+          </h1>
+
+          {/* Loser Highlight */}
+          <div style={{
+            background: "rgba(255, 71, 87, 0.15)",
+            border: "3px solid var(--arcade-red)",
+            borderRadius: "16px",
+            padding: "1rem 1.5rem",
+            marginBottom: "1.8rem",
+            boxShadow: "0 6px 0 rgba(196, 38, 53, 0.4)",
+          }}>
+            <div style={{ fontSize: "2rem", marginBottom: "0.3rem" }}>💀</div>
+            <div style={{ color: "var(--arcade-red)", fontWeight: 800, fontSize: "1.4rem" }}>
+              {roundResult.loserName} WAS "IT"!
+            </div>
+            <div style={{ color: "var(--text-dim)", fontSize: "0.95rem", marginTop: "0.2rem" }}>
+              Time ran out while they were tagged. They lose this round!
+            </div>
+          </div>
+
+          {/* Scores Roster */}
+          <div style={{ marginBottom: "2rem" }}>
+            <h3 style={{
+              fontSize: "0.9rem",
+              fontWeight: 800,
+              color: "var(--text-dim)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: "0.75rem",
+              textAlign: "left",
+            }}>
+              Final Tag Standings
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {sortedScores.map((s: any, rank: number) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.75rem 1.2rem",
+                    background: s.wasIt ? "rgba(255, 71, 87, 0.15)" : "var(--bg-card-inner)",
+                    border: `3px solid ${s.wasIt ? "var(--arcade-red)" : "#0D0B1C"}`,
+                    borderRadius: "12px",
+                    boxShadow: "0 4px 0 #0D0B1C",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span style={{ fontSize: "1.2rem" }}>
+                      {rank === 0 ? "🥇" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : "🎖️"}
+                    </span>
+                    <span style={{
+                      fontWeight: 800,
+                      fontSize: "1.1rem",
+                      color: s.wasIt ? "var(--arcade-red)" : "#FFFFFF",
+                    }}>
+                      {s.name}
+                    </span>
+                    {s.wasIt && (
+                      <span style={{
+                        background: "var(--arcade-red)",
+                        color: "#FFFFFF",
+                        fontSize: "0.75rem",
+                        fontWeight: 900,
+                        padding: "0.15rem 0.5rem",
+                        borderRadius: "6px",
+                      }}>
+                        IT
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ fontWeight: 800, fontSize: "1.1rem", color: "var(--arcade-yellow)" }}>
+                    {s.score} {s.score === 1 ? "tag" : "tags"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
             {amHost && (
-              <button onClick={handleStartGame} style={styles.startBtn}>Rematch</button>
+              <ArcadeButton color="green" size="lg" fullWidth onClick={handleStartGame} icon="🔄">
+                REMATCH!
+              </ArcadeButton>
             )}
-            <button onClick={() => navigate("/")} style={styles.backBtn}>Main Menu</button>
+            <ArcadeButton color="secondary" size="lg" onClick={() => navigate("/")} icon="🏠">
+              LEAVE
+            </ArcadeButton>
           </div>
         </div>
       </div>
     );
   }
 
+  // 3. MULTIPLAYER LOBBY VIEW
   if (status === "lobby") {
     return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Room: {actualRoomId}</h2>
-          <p style={styles.hint}>Room code: <strong style={{ color: "#FFE66D" }}>{actualRoomId}</strong></p>
-
-          <div style={{ marginBottom: "1.5rem" }}>
-            <h3 style={{ color: "#aaa", fontSize: "0.85rem", textTransform: "uppercase", marginBottom: "0.5rem" }}>
-              Participants ({players.length}/13)
-            </h3>
-            {players.length === 0 ? (
-              <p style={styles.hint}>Waiting for room state...</p>
-            ) : players.map((p) => (
-              <div key={p.id} style={styles.playerRow}>
-                <span style={{ ...styles.playerColor, background: p.color }} />
-                <span style={{ color: "#ddd", fontSize: "0.95rem", flex: 1 }}>{p.name}</span>
-                {p.id === serverHostId && (
-                  <span style={{ color: "#FFE66D", fontSize: "0.75rem", fontWeight: 700 }}>HOST</span>
-                )}
-                {p.isIt && (
-                  <span style={{ color: "#FF6B6B", fontSize: "0.75rem", fontWeight: 700 }}>IT</span>
-                )}
+      <div className="arcade-bg">
+        <div className="arcade-card" style={{ maxWidth: "640px" }}>
+          {/* Header & Room Code Box */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "1rem",
+            marginBottom: "1.8rem",
+            borderBottom: "3px solid var(--border-arcade)",
+            paddingBottom: "1.2rem",
+          }}>
+            <div>
+              <div style={{
+                display: "inline-block",
+                background: "rgba(30, 144, 255, 0.2)",
+                color: "#4BA7FF",
+                padding: "0.2rem 0.6rem",
+                borderRadius: "6px",
+                border: "2px solid #1E90FF",
+                fontWeight: 800,
+                fontSize: "0.75rem",
+                marginBottom: "0.3rem",
+              }}>
+                ONLINE MATCH LOBBY
               </div>
-            ))}
+              <h1 style={{
+                fontFamily: "'Fredoka', sans-serif",
+                fontSize: "1.8rem",
+                fontWeight: 800,
+                color: "#FFFFFF",
+                margin: 0,
+              }}>
+                Arena: {MAPS[mapName]?.name || "Skyline Stage"}
+              </h1>
+            </div>
+
+            {/* Room Code Badge with Copy */}
+            <div style={{
+              background: "var(--bg-card-inner)",
+              border: "3px solid #0D0B1C",
+              borderRadius: "14px",
+              padding: "0.5rem 1rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              boxShadow: "0 4px 0 #0D0B1C",
+            }}>
+              <div>
+                <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 800, textTransform: "uppercase" }}>
+                  ROOM CODE
+                </div>
+                <div style={{
+                  fontFamily: "'Outfit', monospace",
+                  fontSize: "1.6rem",
+                  fontWeight: 900,
+                  color: "var(--arcade-yellow)",
+                  letterSpacing: "0.15em",
+                  lineHeight: 1,
+                }}>
+                  {actualRoomId}
+                </div>
+              </div>
+              <button
+                onClick={handleCopyCode}
+                className="arcade-chip"
+                style={{ padding: "0.45rem 0.8rem", fontSize: "0.85rem" }}
+              >
+                {copied ? "✅ COPIED!" : "📋 COPY"}
+              </button>
+            </div>
           </div>
 
-          {amHost && (
-            <button onClick={handleStartGame} style={styles.startBtn}>
-              Start Game
-            </button>
-          )}
-          <button onClick={() => navigate("/")} style={styles.backBtn}>Leave Room</button>
+          {/* Participants Counter */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "0.8rem",
+          }}>
+            <span style={{
+              fontSize: "0.9rem",
+              fontWeight: 800,
+              color: "var(--text-dim)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}>
+              PARTICIPANTS ({players.length}/13)
+            </span>
+            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              {players.length < 2 ? "Waiting for players to join..." : "Ready to launch!"}
+            </span>
+          </div>
+
+          {/* Participant Cards Grid */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+            gap: "0.75rem",
+            marginBottom: "2rem",
+            maxHeight: "360px",
+            overflowY: "auto",
+            paddingRight: "4px",
+          }}>
+            {players.map(p => {
+              const isMe = p.name === myName;
+              const isServerHost = p.id === serverHostId;
+
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    background: "var(--bg-card-inner)",
+                    border: `3px solid ${p.color}`,
+                    borderRadius: "14px",
+                    padding: "0.8rem",
+                    boxShadow: `0 4px 0 ${p.color}40, 0 6px 0 #0D0B1C`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                  }}
+                >
+                  <span style={{
+                    width: "16px",
+                    height: "16px",
+                    borderRadius: "50%",
+                    background: p.color,
+                    border: "2px solid #FFFFFF",
+                    flexShrink: 0,
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontWeight: 800,
+                      fontSize: "1rem",
+                      color: "#FFFFFF",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {p.name} {isMe && "(YOU)"}
+                    </div>
+                    <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.2rem" }}>
+                      {isServerHost && (
+                        <span style={{
+                          background: "var(--arcade-yellow)",
+                          color: "#3A2800",
+                          fontSize: "0.65rem",
+                          fontWeight: 900,
+                          padding: "0.1rem 0.4rem",
+                          borderRadius: "4px",
+                        }}>
+                          HOST
+                        </span>
+                      )}
+                      {p.isIt && (
+                        <span style={{
+                          background: "var(--arcade-red)",
+                          color: "#FFFFFF",
+                          fontSize: "0.65rem",
+                          fontWeight: 900,
+                          padding: "0.1rem 0.4rem",
+                          borderRadius: "4px",
+                        }}>
+                          STARTS IT
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Actions */}
+          <div style={{ display: "flex", gap: "1rem" }}>
+            {amHost ? (
+              <ArcadeButton
+                color="green"
+                size="lg"
+                fullWidth
+                onClick={handleStartGame}
+                disabled={players.length < 1}
+                icon="▶"
+              >
+                START GAME
+              </ArcadeButton>
+            ) : (
+              <div style={{
+                flex: 1,
+                background: "var(--bg-card-inner)",
+                border: "3px solid #0D0B1C",
+                borderRadius: "16px",
+                padding: "0.85rem",
+                textAlign: "center",
+                color: "var(--text-dim)",
+                fontWeight: 700,
+              }}>
+                ⏳ WAITING FOR HOST TO START...
+              </div>
+            )}
+
+            <ArcadeButton color="secondary" size="lg" onClick={() => navigate("/")}>
+              LEAVE
+            </ArcadeButton>
+          </div>
         </div>
       </div>
     );
   }
 
+  // 4. ACTIVE PLAYING CANVAS VIEW
   if (status === "playing") {
     return (
       <canvas
         ref={canvasRef}
-        style={{ display: "block", width: "100vw", height: "100vh", background: "#0f0f23" }}
+        style={{
+          display: "block",
+          width: "100vw",
+          height: "100vh",
+          background: "#0C0A1A",
+          cursor: "none",
+        }}
       />
     );
   }
 
   return null;
 }
-
-function renderOnlineGame(
-  ctx: CanvasRenderingContext2D,
-  state: any,
-  canvasW: number,
-  canvasH: number,
-  map: GameMap
-) {
-  const offsetX = Math.floor((canvasW - map.width) / 2);
-  const offsetY = Math.floor((canvasH - HUD_HEIGHT - map.height) / 2) + HUD_HEIGHT;
-
-  ctx.save();
-  ctx.translate(offsetX, offsetY);
-
-  renderOnlineStageBackground(ctx, map);
-
-  for (const o of map.obstacles) {
-    renderOnlinePlatform(ctx, o.x, o.y, o.w, o.h);
-  }
-
-  if (state.stickyPatches) {
-    state.stickyPatches.forEach((sp: any) => {
-      const alpha = Math.min(1, sp.remainingMs / 1000);
-      ctx.fillStyle = `rgba(139, 69, 19, ${alpha * 0.5})`;
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, 40, 0, Math.PI * 2); ctx.fill();
-    });
-  }
-
-  if (state.spawns) {
-    state.spawns.forEach((spawn: any) => {
-      const type = POWER_UP_INDEX_TO_TYPE[spawn.type];
-      const config = type ? POWER_UP_CONFIGS[type] : undefined;
-      if (!config) return;
-      ctx.fillStyle = config.color;
-      ctx.globalAlpha = 0.7 + Math.sin(Date.now() / 300) * 0.3;
-      ctx.beginPath(); ctx.arc(spawn.x, spawn.y, 14, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
-      ctx.font = "14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillStyle = "#fff"; ctx.fillText(config.icon, spawn.x, spawn.y);
-    });
-  }
-
-  if (state.players) {
-    state.players.forEach((player: any, id: string) => {
-      const activePowerUpType = POWER_UP_INDEX_TO_TYPE[player.activePowerUpType];
-      const isGhost = activePowerUpType === "ghost_step";
-      const isFrozen = activePowerUpType === "freeze_pulse";
-      const hasBubble = activePowerUpType === "safe_bubble";
-
-      if (isGhost) ctx.globalAlpha = 0.25;
-
-      drawOnlinePlayer(ctx, player.x, player.y, player.color, player.isIt, isFrozen);
-
-      if (hasBubble) {
-        ctx.strokeStyle = "#32CD32"; ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, PLAYER_SIZE + 8, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      ctx.globalAlpha = 1;
-
-      ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(player.name, player.x + PLAYER_SIZE, player.y - 8);
-    });
-  }
-
-  ctx.restore();
-}
-
-function drawOnlinePlayer(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number,
-  color: string, isIt: boolean, isFrozen: boolean
-) {
-  const cx = x + PLAYER_SIZE;
-  const cy = y + PLAYER_SIZE;
-
-  ctx.fillStyle = "rgba(0,0,0,0.24)";
-  ctx.beginPath();
-  ctx.ellipse(cx, y + PLAYER_SIZE * 2 + 3, PLAYER_SIZE * 0.9, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = isFrozen ? "#6699CC" : color;
-  roundOnlineRect(ctx, x + 3, y + 5, PLAYER_SIZE * 2 - 6, PLAYER_SIZE * 2 - 3, 8);
-  ctx.fill();
-
-  ctx.fillStyle = "#102033";
-  roundOnlineRect(ctx, x + 7, y + 8, PLAYER_SIZE * 2 - 14, PLAYER_SIZE + 7, 5);
-  ctx.fill();
-
-  ctx.strokeStyle = "#FFFFFF";
-  ctx.lineWidth = 2;
-  roundOnlineRect(ctx, x + 3, y + 5, PLAYER_SIZE * 2 - 6, PLAYER_SIZE * 2 - 3, 8);
-  ctx.stroke();
-
-  ctx.fillStyle = "#FFFFFF";
-  ctx.beginPath(); ctx.arc(cx - 5, cy - 2, 2.5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 5, cy - 2, 2.5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#111827";
-  ctx.beginPath(); ctx.arc(cx - 5, cy - 2, 1.2, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 5, cy - 2, 1.2, 0, Math.PI * 2); ctx.fill();
-
-  if (isIt) {
-    const arrowY = y - 18;
-    ctx.save();
-    ctx.translate(cx, arrowY);
-    ctx.fillStyle = "#FF6B6B";
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-7, 9);
-    ctx.lineTo(7, 9);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(0, 2);
-    ctx.lineTo(0, 16);
-    ctx.strokeStyle = "#FF6B6B";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-function renderOnlineStageBackground(ctx: CanvasRenderingContext2D, map: GameMap) {
-  const gradient = ctx.createLinearGradient(0, 0, 0, map.height);
-  gradient.addColorStop(0, "#43a5f5");
-  gradient.addColorStop(1, "#55d3e6");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, map.width, map.height);
-
-  ctx.fillStyle = "rgba(44, 107, 190, 0.22)";
-  ctx.beginPath();
-  ctx.ellipse(map.width * 0.78, map.height * 0.62, map.width * 0.28, 70, -0.08, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(map.width * 0.36, map.height * 0.7, map.width * 0.32, 60, 0.05, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(50, 107, 200, 0.28)";
-  for (let x = -80; x < map.width; x += 260) {
-    ctx.fillRect(x + 90, map.height * 0.42, 170, map.height * 0.28);
-    ctx.fillRect(x + 125, map.height * 0.38, 100, map.height * 0.06);
-  }
-}
-
-function renderOnlinePlatform(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  ctx.fillStyle = "#2ee870";
-  ctx.fillRect(x, y, w, 9);
-  ctx.fillStyle = "#ff3f8e";
-  ctx.fillRect(x, y + 9, w, h - 9);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-  ctx.fillRect(x, y, w, 2);
-
-  ctx.strokeStyle = "rgba(24, 157, 75, 0.75)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let px = x + 8; px < x + w; px += 14) {
-    ctx.lineTo(px, y + 11 + ((px / 14) % 2) * 4);
-  }
-  ctx.stroke();
-}
-
-function roundOnlineRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-}
-
-function renderOnlineHUD(ctx: CanvasRenderingContext2D, state: any, canvasW: number) {
-  ctx.fillStyle = "rgba(15, 15, 35, 0.95)";
-  ctx.fillRect(0, 0, canvasW, HUD_HEIGHT);
-
-  ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, HUD_HEIGHT); ctx.lineTo(canvasW, HUD_HEIGHT); ctx.stroke();
-
-  const timeLeft = Math.ceil(state.roundTimeRemaining ?? 0);
-  const m = Math.floor(timeLeft / 60);
-  const s = timeLeft % 60;
-
-  ctx.font = "bold 20px monospace"; ctx.textAlign = "center";
-  ctx.fillStyle = timeLeft <= 10 ? "#FF4444" : "#FFFFFF";
-  ctx.fillText(`${m}:${s.toString().padStart(2, "0")}`, canvasW / 2, 32);
-
-  if (state.players) {
-    const list: any[] = [];
-    state.players.forEach((p: any) => list.push(p));
-    const rightX = canvasW - 20;
-    ctx.textAlign = "right";
-    ctx.font = "bold 12px sans-serif";
-    ctx.fillStyle = "#FFE66D";
-    ctx.fillText(`Participants: ${list.length}/13`, rightX, 18);
-
-    ctx.font = "12px sans-serif";
-    list.slice(0, 6).forEach((p, i) => {
-      ctx.fillStyle = p.isIt ? "#FF6B6B" : p.color || "#FFFFFF";
-      ctx.fillText(`${p.name}${p.isIt ? " • IT" : ""}  ${p.score ?? 0}`, rightX, 35 + i * 15);
-    });
-  }
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%)",
-    padding: "1rem",
-  },
-  card: {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "16px",
-    padding: "2rem",
-    width: "100%",
-    maxWidth: "480px",
-    textAlign: "center",
-  },
-  heading: {
-    fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "1rem",
-  },
-  hint: {
-    color: "#888", fontSize: "0.9rem", marginBottom: "1rem",
-  },
-  playerRow: {
-    display: "flex", alignItems: "center", gap: "0.75rem",
-    padding: "0.5rem 1rem", background: "rgba(255,255,255,0.03)", borderRadius: "8px",
-    marginBottom: "0.4rem",
-  },
-  playerColor: {
-    width: "12px", height: "12px", borderRadius: "50%", flexShrink: 0,
-  },
-  startBtn: {
-    width: "100%", padding: "0.9rem",
-    background: "linear-gradient(135deg, #4ECDC4, #2ABFB5)",
-    border: "none", borderRadius: "10px",
-    color: "#fff", fontSize: "1.1rem", fontWeight: 700, cursor: "pointer",
-    marginBottom: "0.5rem",
-  },
-  backBtn: {
-    width: "100%", padding: "0.7rem",
-    background: "transparent", border: "1px solid rgba(255,255,255,0.2)",
-    borderRadius: "10px", color: "#888", fontSize: "0.9rem", cursor: "pointer",
-  },
-};

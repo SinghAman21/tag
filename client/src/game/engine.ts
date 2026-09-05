@@ -23,6 +23,17 @@ import {
   PLAYER_COLORS,
 } from "chase-tag-shared";
 
+export interface VisualEvent {
+  id: string;
+  type: "tag" | "shield_block" | "cover_block" | "freeze" | "pickup";
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  remainingMs: number;
+  maxMs: number;
+}
+
 export interface LocalGameState {
   players: PlayerState[];
   spawns: PowerUpSpawn[];
@@ -35,6 +46,7 @@ export interface LocalGameState {
   ended: boolean;
   result: { loserId: string; loserName: string } | null;
   tagLocked: boolean;
+  events: VisualEvent[];
 }
 
 export interface LocalPlayerInput {
@@ -88,7 +100,53 @@ export function createLocalGame(
     ended: false,
     result: null,
     tagLocked: false,
+    events: [],
   };
+}
+
+function lineSegmentsIntersect(
+  x1: number, y1: number, x2: number, y2: number,
+  x3: number, y3: number, x4: number, y4: number
+): boolean {
+  const ccw = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+    return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax);
+  };
+  return ccw(x1, y1, x3, y3, x4, y4) !== ccw(x2, y2, x3, y3, x4, y4) &&
+         ccw(x1, y1, x2, y2, x3, y3) !== ccw(x1, y1, x2, y2, x4, y4);
+}
+
+function lineIntersectsBox(
+  x1: number, y1: number, x2: number, y2: number,
+  bx: number, by: number, bw: number, bh: number
+): boolean {
+  const minX = Math.min(x1, x2);
+  const maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  if (bx + bw < minX || bx > maxX || by + bh < minY || by > maxY) return false;
+
+  if (x1 > bx && x1 < bx + bw && y1 > by && y1 < by + bh) return true;
+  if (x2 > bx && x2 < bx + bw && y2 > by && y2 < by + bh) return true;
+
+  return (
+    lineSegmentsIntersect(x1, y1, x2, y2, bx, by, bx + bw, by) ||
+    lineSegmentsIntersect(x1, y1, x2, y2, bx, by + bh, bx + bw, by + bh) ||
+    lineSegmentsIntersect(x1, y1, x2, y2, bx, by, bx, by + bh) ||
+    lineSegmentsIntersect(x1, y1, x2, y2, bx + bw, by, bx + bw, by + bh)
+  );
+}
+
+export function hasLineOfSight(
+  x1: number, y1: number, x2: number, y2: number,
+  obstacles: Obstacle[]
+): boolean {
+  for (const o of obstacles) {
+    if (o.x < 0 || o.x >= 2000) continue;
+    if (lineIntersectsBox(x1, y1, x2, y2, o.x, o.y, o.w, o.h)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function rectCollides(
@@ -278,6 +336,16 @@ export function updateLocalGame(
     if (player.y >= state.map.height - PLAYER_SIZE * 2) player.vy = 0;
   }
 
+  // Update visual events
+  if (state.events) {
+    state.events = state.events.filter(ev => {
+      ev.remainingMs -= dt;
+      return ev.remainingMs > 0;
+    });
+  } else {
+    state.events = [];
+  }
+
   // Power-up pickup (auto-activate immediately)
   for (const player of state.players) {
     for (let si = state.spawns.length - 1; si >= 0; si--) {
@@ -287,6 +355,17 @@ export function updateLocalGame(
           activatePowerUp(state, player, spawn.type);
           const config = POWER_UP_CONFIGS[spawn.type];
           player.powerUpCooldown = config.cooldownMs;
+
+          state.events.push({
+            id: `ev_${Date.now()}_${Math.random()}`,
+            type: "pickup",
+            text: `+ ${config.icon} ${config.name.toUpperCase()}!`,
+            x: player.x + PLAYER_SIZE,
+            y: player.y - 12,
+            color: config.color,
+            remainingMs: 1400,
+            maxMs: 1400,
+          });
         }
         state.spawns.splice(si, 1);
       }
@@ -296,6 +375,9 @@ export function updateLocalGame(
   // Tag check
   const itPlayer = state.players.find(p => p.isIt);
   if (itPlayer) {
+    const itCx = itPlayer.x + PLAYER_SIZE;
+    const itCy = itPlayer.y + PLAYER_SIZE;
+
     if (state.tagLocked) {
       let stillOverlapping = false;
       for (const other of state.players) {
@@ -317,9 +399,40 @@ export function updateLocalGame(
         if (!other.alive) continue;
 
         if (dist(itPlayer, other) < TAG_RADIUS) {
+          const otherCx = other.x + PLAYER_SIZE;
+          const otherCy = other.y + PLAYER_SIZE;
+
+          // Check line-of-sight cover (solid platform or cover tree)
+          if (!hasLineOfSight(itCx, itCy, otherCx, otherCy, state.map.obstacles)) {
+            // Visual indicator for blocked tag behind cover (throttled)
+            if (!state.events.some(e => e.type === "cover_block" && e.remainingMs > 800)) {
+              state.events.push({
+                id: `ev_${Date.now()}`,
+                type: "cover_block",
+                text: "🌳 COVER BLOCKED!",
+                x: (itCx + otherCx) / 2,
+                y: Math.min(itCy, otherCy) - 16,
+                color: "#2ED573",
+                remainingMs: 1000,
+                maxMs: 1000,
+              });
+            }
+            continue;
+          }
+
           // Check safe bubble
           if (other.activePowerUp?.type === "safe_bubble") {
             other.activePowerUp = null;
+            state.events.push({
+              id: `ev_${Date.now()}`,
+              type: "shield_block",
+              text: "🛡️ SHIELD BLOCKED TAG!",
+              x: otherCx,
+              y: other.y - 16,
+              color: "#2ED573",
+              remainingMs: 1200,
+              maxMs: 1200,
+            });
             continue;
           }
 
@@ -328,6 +441,17 @@ export function updateLocalGame(
           other.isIt = true;
           itPlayer.score += 1;
           state.tagLocked = true;
+
+          state.events.push({
+            id: `ev_${Date.now()}_tag`,
+            type: "tag",
+            text: `👑 ${itPlayer.name} TAGGED ${other.name}!`,
+            x: (itCx + otherCx) / 2,
+            y: Math.min(itCy, otherCy) - 24,
+            color: "#FF4757",
+            remainingMs: 1600,
+            maxMs: 1600,
+          });
           break;
         }
       }

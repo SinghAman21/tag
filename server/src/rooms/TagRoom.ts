@@ -65,6 +65,51 @@ function collidesWithObstacles(x: number, y: number, obstacles: any[]): boolean 
   return false;
 }
 
+function lineSegmentsIntersect(
+  x1: number, y1: number, x2: number, y2: number,
+  x3: number, y3: number, x4: number, y4: number
+): boolean {
+  const ccw = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+    return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax);
+  };
+  return ccw(x1, y1, x3, y3, x4, y4) !== ccw(x2, y2, x3, y3, x4, y4) &&
+         ccw(x1, y1, x2, y2, x3, y3) !== ccw(x1, y1, x2, y2, x4, y4);
+}
+
+function lineIntersectsBox(
+  x1: number, y1: number, x2: number, y2: number,
+  bx: number, by: number, bw: number, bh: number
+): boolean {
+  const minX = Math.min(x1, x2);
+  const maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  if (bx + bw < minX || bx > maxX || by + bh < minY || by > maxY) return false;
+
+  if (x1 > bx && x1 < bx + bw && y1 > by && y1 < by + bh) return true;
+  if (x2 > bx && x2 < bx + bw && y2 > by && y2 < by + bh) return true;
+
+  return (
+    lineSegmentsIntersect(x1, y1, x2, y2, bx, by, bx + bw, by) ||
+    lineSegmentsIntersect(x1, y1, x2, y2, bx, by + bh, bx + bw, by + bh) ||
+    lineSegmentsIntersect(x1, y1, x2, y2, bx, by, bx, by + bh) ||
+    lineSegmentsIntersect(x1, y1, x2, y2, bx + bw, by, bx + bw, by + bh)
+  );
+}
+
+function hasLineOfSight(
+  x1: number, y1: number, x2: number, y2: number,
+  obstacles: any[]
+): boolean {
+  for (const o of obstacles) {
+    if (o.x < 0 || o.x >= 2000) continue;
+    if (lineIntersectsBox(x1, y1, x2, y2, o.x, o.y, o.w, o.h)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function isGrounded(player: PlayerSchema, map: GameMap): boolean {
   const playerH = PLAYER_SIZE * 2;
   return player.y >= map.height - playerH - 0.5 || collidesWithObstacles(player.x, player.y + 2, map.obstacles);
@@ -542,6 +587,11 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
           if (!other.alive) continue;
 
           if (dist(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE) < TAG_RADIUS) {
+            // Check line of sight cover (trees or platforms)
+            if (!hasLineOfSight(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE, this.map.obstacles)) {
+              continue;
+            }
+
             if (other.activePowerUpType === POWER_UP_TYPE_INDEX.safe_bubble) {
               other.activePowerUpType = -1;
               other.activePowerUpRemaining = 0;

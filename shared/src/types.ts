@@ -40,6 +40,14 @@ export interface Obstacle {
   y: number;
   w: number;
   h: number;
+  type?: "platform" | "cover_tree" | "wall";
+}
+
+export interface SceneryProp {
+  type: "tree" | "bush" | "cloud" | "sign";
+  x: number;
+  y: number;
+  scale?: number;
 }
 
 export interface GameMap {
@@ -49,6 +57,7 @@ export interface GameMap {
   obstacles: Obstacle[];
   spawnPoints: Vec2[];
   powerUpSpawns: Vec2[];
+  scenery?: SceneryProp[];
 }
 
 export interface StickyPatch {

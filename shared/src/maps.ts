@@ -6,7 +6,11 @@ const PLATFORM_H = 22;
 const PLAYER_H = 32;
 
 function platform(x: number, y: number, w: number): Obstacle {
-  return { x, y, w, h: PLATFORM_H };
+  return { x, y, w, h: PLATFORM_H, type: "platform" };
+}
+
+function coverTree(x: number, platformY: number): Obstacle {
+  return { x, y: platformY - 58, w: 32, h: 58, type: "cover_tree" };
 }
 
 function onPlatform(x: number, platformY: number) {
@@ -19,8 +23,8 @@ function abovePlatform(x: number, platformY: number) {
 
 function sideWalls(width: number, height: number): Obstacle[] {
   return [
-    { x: -24, y: 0, w: 24, h: height },
-    { x: width, y: 0, w: 24, h: height },
+    { x: -24, y: 0, w: 24, h: height, type: "wall" },
+    { x: width, y: 0, w: 24, h: height, type: "wall" },
   ];
 }
 
@@ -31,17 +35,20 @@ export const SKYLINE_STAGE: GameMap = {
   obstacles: [
     ...sideWalls(FIELD_W, FIELD_H),
     platform(0, 820, 250),
-    platform(270, 820, 260),
+    platform(290, 820, 260),
     platform(770, 790, 380),
     platform(1320, 800, 280),
     platform(230, 680, 880),
     platform(1350, 665, 250),
     platform(0, 555, 240),
     platform(350, 540, 650),
-    platform(980, 410, 600),
+    platform(980, 410, 570),
     platform(280, 390, 380),
     platform(640, 265, 380),
     platform(1340, 280, 260),
+    // Tactical cover trees on platforms
+    coverTree(320, 680),
+    coverTree(1200, 410),
   ],
   spawnPoints: [
     onPlatform(620, 540),
@@ -68,6 +75,13 @@ export const SKYLINE_STAGE: GameMap = {
     abovePlatform(180, 820),
     abovePlatform(1450, 800),
   ],
+  scenery: [
+    { type: "tree", x: 120, y: 555, scale: 0.9 },
+    { type: "tree", x: 1400, y: 665, scale: 0.85 },
+    { type: "bush", x: 80, y: 820, scale: 0.8 },
+    { type: "bush", x: 840, y: 790, scale: 0.75 },
+    { type: "bush", x: 740, y: 265, scale: 0.7 },
+  ],
 };
 
 export const COMPACT_STAGE: GameMap = {
@@ -85,6 +99,9 @@ export const COMPACT_STAGE: GameMap = {
     platform(360, 380, 390),
     platform(820, 300, 280),
     platform(260, 250, 300),
+    // Tactical cover trees
+    coverTree(300, 520),
+    coverTree(480, 380),
   ],
   spawnPoints: [
     onPlatform(400, 635),
@@ -109,6 +126,11 @@ export const COMPACT_STAGE: GameMap = {
     abovePlatform(700, 500),
     abovePlatform(550, 635),
   ],
+  scenery: [
+    { type: "tree", x: 50, y: 400, scale: 0.8 },
+    { type: "bush", x: 200, y: 635, scale: 0.75 },
+    { type: "bush", x: 860, y: 300, scale: 0.7 },
+  ],
 };
 
 export const OPEN_STAGE: GameMap = {
@@ -125,6 +147,9 @@ export const OPEN_STAGE: GameMap = {
     platform(420, 435, 350),
     platform(930, 335, 370),
     platform(360, 300, 580),
+    // Tactical cover trees
+    coverTree(980, 700),
+    coverTree(620, 300),
   ],
   spawnPoints: [
     onPlatform(570, 700),
@@ -148,6 +173,12 @@ export const OPEN_STAGE: GameMap = {
     abovePlatform(1040, 335),
     abovePlatform(280, 585),
     abovePlatform(760, 560),
+  ],
+  scenery: [
+    { type: "tree", x: 80, y: 455, scale: 0.9 },
+    { type: "tree", x: 1100, y: 335, scale: 0.85 },
+    { type: "bush", x: 220, y: 700, scale: 0.8 },
+    { type: "bush", x: 740, y: 560, scale: 0.75 },
   ],
 };
 
