@@ -348,7 +348,6 @@ export default function OnlineGame() {
           setHudTimeLeft(roundLength);
           smoothedPlayersRef.current.clear();
           lastRenderAtRef.current = 0;
-          gameFrameRef.current = null;
           setStatus("playing");
         });
 
@@ -432,7 +431,7 @@ export default function OnlineGame() {
         canvas.height = window.innerHeight;
       }
 
-      const state = room.state;
+      const state = gameFrameRef.current ?? room.state;
       const map = MAPS[state.mapName] ?? MAPS.arena;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);

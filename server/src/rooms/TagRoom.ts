@@ -420,9 +420,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     this.tagLocked = false;
 
     const players = playerList(this.s);
-    const initialItId = players.length > 0
-      ? players[Math.floor(Math.random() * players.length)].id
-      : "";
+    const initialItId = this.hostId ?? players[0]?.id ?? "";
     let idx = 0;
     this.s.players.forEach((player) => {
       const spawn = this.map.spawnPoints[idx % this.map.spawnPoints.length];
@@ -447,12 +445,15 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
 
     this.lastTick = Date.now();
 
+    if (this.tickInterval) clearInterval(this.tickInterval);
+    if (this.powerUpInterval) clearInterval(this.powerUpInterval);
     this.tickInterval = setInterval(() => this.gameTick(), 1000 / SERVER_TICK_RATE);
     if (this.config.powerUpsEnabled) {
       this.powerUpInterval = setInterval(() => this.spawnPowerUp(), 12000);
     }
 
     this.sendLobbyState();
+    this.sendGameFrame();
     this.broadcast("gameStarted", {});
   }
 
@@ -631,7 +632,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
       }
     }
 
-
+    this.sendGameFrame();
   }
 
   activatePowerUp(player: PlayerSchema, type: PowerUpType) {
