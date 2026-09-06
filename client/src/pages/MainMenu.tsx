@@ -3,6 +3,40 @@ import { Link } from "react-router-dom";
 export default function MainMenu() {
   return (
     <div className="arcade-bg">
+      <a
+        href="https://github.com/SinghAman21/tag"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View source on GitHub"
+        title="View source on GitHub — star & contribute"
+        style={{
+          position: "absolute",
+          top: "1.25rem",
+          right: "1.25rem",
+          zIndex: 10,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.55rem",
+          background: "#FFFFFF",
+          border: "3px solid #0D0B1C",
+          borderRadius: "999px",
+          padding: "0.55rem 1.05rem",
+          boxShadow: "0 5px 0 #0D0B1C, 0 12px 20px rgba(0,0,0,0.35)",
+          color: "#0D0B1C",
+          fontWeight: 900,
+          fontSize: "0.95rem",
+          letterSpacing: "0.02em",
+          textDecoration: "none",
+          transform: "rotate(1.5deg)",
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#0D0B1C" aria-hidden="true">
+          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.27 5.66.41.35.77 1.05.77 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+        </svg>
+        <span>GitHub</span>
+        <span style={{ background: "#FFD13B", border: "2px solid #0D0B1C", borderRadius: "999px", padding: "0.1rem 0.45rem", fontSize: "0.8rem", lineHeight: 1 }}>Star</span>
+      </a>
+
       {/* Decorative floating arcade shapes in background */}
       <div className="arcade-shape" style={{ width: 140, height: 140, background: "var(--arcade-yellow)", top: "10%", left: "8%" }} />
       <div className="arcade-shape" style={{ width: 180, height: 180, background: "var(--arcade-purple)", bottom: "12%", right: "8%", animationDelay: "-3s" }} />
@@ -285,6 +319,33 @@ export default function MainMenu() {
           <span><strong>Last "IT" loses!</strong></span>
         </div>
       </div>
+
+      <a
+        href="https://github.com/SinghAman21/tag"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          marginTop: "1.5rem",
+          zIndex: 2,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.6rem",
+          background: "rgba(32, 29, 64, 0.9)",
+          border: "3px solid #0D0B1C",
+          borderRadius: "999px",
+          padding: "0.5rem 1.2rem",
+          boxShadow: "0 4px 0 #0D0B1C",
+          color: "#E0E0FF",
+          fontWeight: 700,
+          fontSize: "0.95rem",
+          textDecoration: "none",
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true">
+          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.27 5.66.41.35.77 1.05.77 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+        </svg>
+        <span>Star on GitHub</span>
+      </a>
     </div>
   );
 }
