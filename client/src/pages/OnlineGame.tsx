@@ -2,9 +2,17 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as Colyseus from "colyseus.js";
 import {
+  type GameMap,
+  type Obstacle,
   type PlayerState,
+  GRAVITY,
   MAPS,
+  MAX_FALL_SPEED,
+  PLAYER_JUMP_SPEED,
+  PLAYER_MOVE_SPEED,
+  PLAYER_SIZE,
   POWER_UP_INDEX_TO_TYPE,
+  SPEED_SURGE_MULTIPLIER,
 } from "chase-tag-shared";
 import { renderGame, renderHUD, extractPlayers } from "../game/renderer.js";
 import ArcadeButton from "../components/ArcadeButton.js";
@@ -44,7 +52,14 @@ function lobbyPlayerToState(player: any): PlayerState {
   };
 }
 
-function inputMask(input: { up: boolean; down: boolean; left: boolean; right: boolean }) {
+interface OnlineInput {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+}
+
+function inputMask(input: OnlineInput) {
   let mask = 0;
   if (input.up) mask |= 1;
   if (input.down) mask |= 2;
@@ -53,11 +68,129 @@ function inputMask(input: { up: boolean; down: boolean; left: boolean; right: bo
   return mask;
 }
 
+function currentInput(keys: Record<string, boolean>): OnlineInput {
+  return {
+    up: !!keys["w"] || !!keys["ArrowUp"] || !!keys["8"],
+    down: !!keys["s"] || !!keys["ArrowDown"] || !!keys["5"],
+    left: !!keys["a"] || !!keys["ArrowLeft"] || !!keys["4"],
+    right: !!keys["d"] || !!keys["ArrowRight"] || !!keys["6"],
+  };
+}
+
+function rectCollides(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function collidesWithObstacles(x: number, y: number, obstacles: Obstacle[]) {
+  return obstacles.some(o => rectCollides(x, y, PLAYER_SIZE * 2, PLAYER_SIZE * 2, o.x, o.y, o.w, o.h));
+}
+
+function horizontallyOverlaps(x: number, obstacle: Obstacle) {
+  const playerW = PLAYER_SIZE * 2;
+  return x + playerW > obstacle.x && x < obstacle.x + obstacle.w;
+}
+
+function isGrounded(player: PlayerState, map: GameMap) {
+  const playerH = PLAYER_SIZE * 2;
+  return player.y >= map.height - playerH - 0.5 || collidesWithObstacles(player.x, player.y + 2, map.obstacles);
+}
+
+function movePredictedVertically(player: PlayerState, newY: number, map: GameMap) {
+  const playerH = PLAYER_SIZE * 2;
+  const oldY = player.y;
+
+  if (player.vy >= 0) {
+    const oldBottom = oldY + playerH;
+    const newBottom = newY + playerH;
+    for (const o of map.obstacles) {
+      if (horizontallyOverlaps(player.x, o) && oldBottom <= o.y && newBottom >= o.y) {
+        player.y = o.y - playerH;
+        player.vy = 0;
+        return;
+      }
+    }
+  } else {
+    for (const o of map.obstacles) {
+      const obstacleBottom = o.y + o.h;
+      if (horizontallyOverlaps(player.x, o) && oldY >= obstacleBottom && newY <= obstacleBottom) {
+        player.y = obstacleBottom;
+        player.vy = 0;
+        return;
+      }
+    }
+  }
+
+  if (!collidesWithObstacles(player.x, newY, map.obstacles)) {
+    player.y = newY;
+  } else {
+    player.vy = 0;
+  }
+}
+
+function predictLocalPlayer(serverPlayer: PlayerState, previousPlayer: PlayerState, input: OnlineInput, map: GameMap, dtMs: number) {
+  const predicted: PlayerState = {
+    ...serverPlayer,
+    x: previousPlayer.x,
+    y: previousPlayer.y,
+    vx: previousPlayer.vx,
+    vy: previousPlayer.vy,
+    facing: { ...serverPlayer.facing },
+  };
+
+  const frameScale = dtMs / (1000 / 60);
+  const isFrozen = serverPlayer.activePowerUp?.type === "freeze_pulse";
+  let speed = PLAYER_MOVE_SPEED;
+  if (serverPlayer.activePowerUp?.type === "speed_surge") {
+    speed *= SPEED_SURGE_MULTIPLIER;
+  }
+
+  let dx = 0;
+  if (!isFrozen) {
+    if (input.left) dx -= speed * frameScale;
+    if (input.right) dx += speed * frameScale;
+    if (dx !== 0) predicted.facing = { x: Math.sign(dx), y: 0 };
+    if (input.up && isGrounded(predicted, map)) {
+      predicted.vy = -PLAYER_JUMP_SPEED;
+    }
+  }
+
+  predicted.vx = dx;
+  predicted.vy = Math.min(MAX_FALL_SPEED, predicted.vy + GRAVITY * frameScale);
+
+  const newX = predicted.x + predicted.vx;
+  if (!collidesWithObstacles(newX, predicted.y, map.obstacles)) {
+    predicted.x = newX;
+  } else {
+    predicted.vx = 0;
+  }
+
+  movePredictedVertically(predicted, predicted.y + predicted.vy * frameScale, map);
+
+  predicted.x = Math.max(0, Math.min(map.width - PLAYER_SIZE * 2, predicted.x));
+  predicted.y = Math.max(0, Math.min(map.height - PLAYER_SIZE * 2, predicted.y));
+  if (predicted.y >= map.height - PLAYER_SIZE * 2) predicted.vy = 0;
+
+  const error = Math.hypot(serverPlayer.x - predicted.x, serverPlayer.y - predicted.y);
+  if (error > 150) {
+    predicted.x = serverPlayer.x;
+    predicted.y = serverPlayer.y;
+    predicted.vx = serverPlayer.vx;
+    predicted.vy = serverPlayer.vy;
+  } else {
+    predicted.x += (serverPlayer.x - predicted.x) * 0.08;
+    predicted.y += (serverPlayer.y - predicted.y) * 0.08;
+  }
+
+  return predicted;
+}
+
 function smoothOnlinePlayers(
   rawPlayers: PlayerState[],
   previousPlayers: Map<string, PlayerState>,
   dtMs: number,
-  localPlayerId?: string
+  localPlayerId: string | undefined,
+  input: OnlineInput,
+  map: GameMap
 ) {
   const nextPlayers = new Map<string, PlayerState>();
   const smoothedPlayers = rawPlayers.map(player => {
@@ -68,17 +201,20 @@ function smoothOnlinePlayers(
       return fresh;
     }
 
-    const dx = player.x - previous.x;
-    const dy = player.y - previous.y;
-    const distance = Math.hypot(dx, dy);
-    const tau = player.id === localPlayerId ? 38 : 75;
-    const alpha = distance > 180 ? 1 : 1 - Math.exp(-dtMs / tau);
-    const smoothed = {
-      ...player,
-      x: previous.x + dx * alpha,
-      y: previous.y + dy * alpha,
-      facing: { ...player.facing },
-    };
+    const smoothed = player.id === localPlayerId
+      ? predictLocalPlayer(player, previous, input, map, dtMs)
+      : (() => {
+        const dx = player.x - previous.x;
+        const dy = player.y - previous.y;
+        const distance = Math.hypot(dx, dy);
+        const alpha = distance > 180 ? 1 : 1 - Math.exp(-dtMs / 75);
+        return {
+          ...player,
+          x: previous.x + dx * alpha,
+          y: previous.y + dy * alpha,
+          facing: { ...player.facing },
+        };
+      })();
     nextPlayers.set(player.id, smoothed);
     return smoothed;
   });
@@ -271,13 +407,7 @@ export default function OnlineGame() {
     const sendInput = () => {
       const room = roomRef.current;
       if (!room) return;
-      const k = keysRef.current;
-      const input = {
-        up: !!k["w"] || !!k["ArrowUp"] || !!k["8"],
-        down: !!k["s"] || !!k["ArrowDown"] || !!k["5"],
-        left: !!k["a"] || !!k["ArrowLeft"] || !!k["4"],
-        right: !!k["d"] || !!k["ArrowRight"] || !!k["6"],
-      };
+      const input = currentInput(keysRef.current);
       const mask = inputMask(input);
       const now = performance.now();
       if (mask !== lastInputRef.current || now - lastInputSentAtRef.current > 100) {
@@ -319,7 +449,14 @@ export default function OnlineGame() {
       const dtMs = lastRenderAtRef.current > 0 ? Math.min(50, now - lastRenderAtRef.current) : 16;
       lastRenderAtRef.current = now;
       const rawPlayerList = extractPlayers(state.players);
-      const playerList = smoothOnlinePlayers(rawPlayerList, smoothedPlayersRef.current, dtMs, room.sessionId);
+      const playerList = smoothOnlinePlayers(
+        rawPlayerList,
+        smoothedPlayersRef.current,
+        dtMs,
+        room.sessionId,
+        currentInput(keysRef.current),
+        map
+      );
       const renderState = {
         players: playerList,
         spawns: state.spawns,
