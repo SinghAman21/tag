@@ -44,6 +44,50 @@ function lobbyPlayerToState(player: any): PlayerState {
   };
 }
 
+function inputMask(input: { up: boolean; down: boolean; left: boolean; right: boolean }) {
+  let mask = 0;
+  if (input.up) mask |= 1;
+  if (input.down) mask |= 2;
+  if (input.left) mask |= 4;
+  if (input.right) mask |= 8;
+  return mask;
+}
+
+function smoothOnlinePlayers(
+  rawPlayers: PlayerState[],
+  previousPlayers: Map<string, PlayerState>,
+  dtMs: number,
+  localPlayerId?: string
+) {
+  const nextPlayers = new Map<string, PlayerState>();
+  const smoothedPlayers = rawPlayers.map(player => {
+    const previous = previousPlayers.get(player.id);
+    if (!previous) {
+      const fresh = { ...player, facing: { ...player.facing } };
+      nextPlayers.set(player.id, fresh);
+      return fresh;
+    }
+
+    const dx = player.x - previous.x;
+    const dy = player.y - previous.y;
+    const distance = Math.hypot(dx, dy);
+    const tau = player.id === localPlayerId ? 38 : 75;
+    const alpha = distance > 180 ? 1 : 1 - Math.exp(-dtMs / tau);
+    const smoothed = {
+      ...player,
+      x: previous.x + dx * alpha,
+      y: previous.y + dy * alpha,
+      facing: { ...player.facing },
+    };
+    nextPlayers.set(player.id, smoothed);
+    return smoothed;
+  });
+
+  previousPlayers.clear();
+  nextPlayers.forEach((player, id) => previousPlayers.set(id, player));
+  return smoothedPlayers;
+}
+
 export default function OnlineGame() {
   const { roomId } = useParams<{ roomId: string }>();
   const normalizedRoomCode = (roomId ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -76,9 +120,11 @@ export default function OnlineGame() {
   const gameFrameRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef<Record<string, boolean>>({});
-  const lastInputRef = useRef<string>("");
+  const lastInputRef = useRef<number>(-1);
   const lastInputSentAtRef = useRef(0);
   const rafRef = useRef<number>(0);
+  const lastRenderAtRef = useRef(0);
+  const smoothedPlayersRef = useRef<Map<string, PlayerState>>(new Map());
   const connectedRef = useRef(false);
   const eventsRef = useRef<any[]>([]);
 
@@ -164,6 +210,9 @@ export default function OnlineGame() {
         room.onMessage("gameStarted", () => {
           setRoundResult(null);
           setHudTimeLeft(roundLength);
+          smoothedPlayersRef.current.clear();
+          lastRenderAtRef.current = 0;
+          gameFrameRef.current = null;
           setStatus("playing");
         });
 
@@ -229,16 +278,16 @@ export default function OnlineGame() {
         left: !!k["a"] || !!k["ArrowLeft"] || !!k["4"],
         right: !!k["d"] || !!k["ArrowRight"] || !!k["6"],
       };
-      const serialized = `${input.up ? 1 : 0}${input.down ? 1 : 0}${input.left ? 1 : 0}${input.right ? 1 : 0}`;
+      const mask = inputMask(input);
       const now = performance.now();
-      if (serialized !== lastInputRef.current || now - lastInputSentAtRef.current > 250) {
-        room.send("input", input);
-        lastInputRef.current = serialized;
+      if (mask !== lastInputRef.current || now - lastInputSentAtRef.current > 100) {
+        room.send("input", mask);
+        lastInputRef.current = mask;
         lastInputSentAtRef.current = now;
       }
     };
 
-    const inputInterval = setInterval(sendInput, 1000 / 30);
+    const inputInterval = setInterval(sendInput, 1000 / 60);
 
     const gameLoop = () => {
       const canvas = canvasRef.current;
@@ -253,7 +302,7 @@ export default function OnlineGame() {
         canvas.height = window.innerHeight;
       }
 
-      const state = gameFrameRef.current ?? room.state;
+      const state = room.state;
       const map = MAPS[state.mapName] ?? MAPS.arena;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -266,8 +315,13 @@ export default function OnlineGame() {
       const nextHudTime = Math.max(0, Math.ceil(state.roundTimeRemaining ?? 0));
       setHudTimeLeft(current => current === nextHudTime ? current : nextHudTime);
 
+      const now = performance.now();
+      const dtMs = lastRenderAtRef.current > 0 ? Math.min(50, now - lastRenderAtRef.current) : 16;
+      lastRenderAtRef.current = now;
+      const rawPlayerList = extractPlayers(state.players);
+      const playerList = smoothOnlinePlayers(rawPlayerList, smoothedPlayersRef.current, dtMs, room.sessionId);
       const renderState = {
-        players: state.players,
+        players: playerList,
         spawns: state.spawns,
         stickyPatches: state.stickyPatches,
         decoys: state.decoys,
@@ -281,7 +335,6 @@ export default function OnlineGame() {
         events: eventsRef.current,
       };
 
-      const playerList = extractPlayers(state.players);
       const myIndex = playerList.findIndex(p => p.id === room.sessionId || p.name === myName);
 
       // Unified responsive renderer

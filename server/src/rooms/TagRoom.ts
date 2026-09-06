@@ -34,6 +34,8 @@ const colyseus = require("colyseus") as any;
 const { Room } = colyseus;
 
 const ROOM_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const SERVER_TICK_RATE = 60;
+const NETWORK_PATCH_RATE = 20;
 
 function generateRoomCode(length = 6): string {
   let code = "";
@@ -43,10 +45,10 @@ function generateRoomCode(length = 6): string {
   return code;
 }
 
-function dist(ax: number, ay: number, bx: number, by: number): number {
+function distSq(ax: number, ay: number, bx: number, by: number): number {
   const dx = ax - bx;
   const dy = ay - by;
-  return Math.sqrt(dx * dx + dy * dy);
+  return dx * dx + dy * dy;
 }
 
 function rectCollides(
@@ -159,6 +161,23 @@ interface InputState {
   right: boolean;
 }
 
+function decodeInput(data: InputState | number): InputState {
+  if (typeof data === "number") {
+    return {
+      up: (data & 1) !== 0,
+      down: (data & 2) !== 0,
+      left: (data & 4) !== 0,
+      right: (data & 8) !== 0,
+    };
+  }
+  return {
+    up: !!data?.up,
+    down: !!data?.down,
+    left: !!data?.left,
+    right: !!data?.right,
+  };
+}
+
 function playerList(state: TagRoomStateSchema): PlayerSchema[] {
   const out: PlayerSchema[] = [];
   state.players.forEach((p) => out.push(p));
@@ -197,7 +216,6 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private powerUpInterval: ReturnType<typeof setInterval> | null = null;
   private lastTick = Date.now();
-  private lastFrameBroadcast = 0;
   private playerInputs: Map<string, InputState> = new Map();
   private tagLocked = false;
   private hostId: string | null = null;
@@ -225,10 +243,10 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     state.powerUpsEnabled = this.config.powerUpsEnabled;
     state.gameStarted = false;
     this.setState(state);
-    this.setPatchRate(250);
+    this.setPatchRate(1000 / NETWORK_PATCH_RATE);
 
-    this.onMessage("input", (client: Client, data: InputState) => {
-      this.playerInputs.set(client.sessionId, data);
+    this.onMessage("input", (client: Client, data: InputState | number) => {
+      this.playerInputs.set(client.sessionId, decodeInput(data));
     });
 
     this.onMessage("startGame", (client: Client) => {
@@ -428,15 +446,13 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
     this.s.decoys.clear();
 
     this.lastTick = Date.now();
-    this.lastFrameBroadcast = 0;
 
-    this.tickInterval = setInterval(() => this.gameTick(), 1000 / 30);
+    this.tickInterval = setInterval(() => this.gameTick(), 1000 / SERVER_TICK_RATE);
     if (this.config.powerUpsEnabled) {
       this.powerUpInterval = setInterval(() => this.spawnPowerUp(), 12000);
     }
 
     this.sendLobbyState();
-    this.sendGameFrame();
     this.broadcast("gameStarted", {});
   }
 
@@ -506,7 +522,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
       }
 
       this.s.stickyPatches.forEach((patch) => {
-        if (dist(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, patch.x, patch.y) < STICKY_PATCH_RADIUS) {
+        if (distSq(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, patch.x, patch.y) < STICKY_PATCH_RADIUS * STICKY_PATCH_RADIUS) {
           speed *= STICKY_SLOW_MULTIPLIER;
         }
       });
@@ -547,7 +563,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
       if (player.heldPowerUp >= 0) return;
       const consumed: string[] = [];
       this.s.spawns.forEach((spawn, key) => {
-        if (dist(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, spawn.x, spawn.y) < POWER_UP_PICKUP_RADIUS) {
+        if (distSq(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, spawn.x, spawn.y) < POWER_UP_PICKUP_RADIUS * POWER_UP_PICKUP_RADIUS) {
           if (player.powerUpCooldown <= 0) {
             const type = POWER_UP_INDEX_TO_TYPE[spawn.type];
             if (type) {
@@ -572,7 +588,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
         for (const other of this.s.players.values()) {
           if (other.id === itPlayer.id) continue;
           if (!other.alive) continue;
-          if (dist(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE) < TAG_RADIUS) {
+          if (distSq(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE) < TAG_RADIUS * TAG_RADIUS) {
             stillOverlapping = true;
             break;
           }
@@ -587,7 +603,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
           if (other.id === itPlayer.id) continue;
           if (!other.alive) continue;
 
-          if (dist(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE) < TAG_RADIUS) {
+          if (distSq(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE) < TAG_RADIUS * TAG_RADIUS) {
             // Check line of sight cover (trees or platforms)
             if (!hasLineOfSight(itCx, itCy, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE, this.map.obstacles)) {
               continue;
@@ -615,10 +631,7 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
       }
     }
 
-    if (now - this.lastFrameBroadcast >= 1000 / 20) {
-      this.lastFrameBroadcast = now;
-      this.sendGameFrame();
-    }
+
   }
 
   activatePowerUp(player: PlayerSchema, type: PowerUpType) {
@@ -639,8 +652,8 @@ export class TagRoom extends (Room as unknown as typeof RoomType) {
         let closestDist = Infinity;
         for (const other of this.s.players.values()) {
           if (other.id === player.id) continue;
-          const d = dist(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE);
-          if (d < FREEZE_RADIUS && d < closestDist) {
+          const d = distSq(player.x + PLAYER_SIZE, player.y + PLAYER_SIZE, other.x + PLAYER_SIZE, other.y + PLAYER_SIZE);
+          if (d < FREEZE_RADIUS * FREEZE_RADIUS && d < closestDist) {
             closestDist = d;
             closest = other;
           }
